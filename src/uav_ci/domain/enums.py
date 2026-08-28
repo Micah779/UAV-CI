@@ -19,6 +19,7 @@ Valid stimulus, all chekcs passed    -> PASS
 
 from enum import StrEnum
 
+
 class ResultStatus(StrEnum):
     PASS = "pass"
     FAIL = "fail"
@@ -26,11 +27,13 @@ class ResultStatus(StrEnum):
     ERROR = "error"
     SKIPPED = "skipped"
 
+
 class AssertionLayer(StrEnum):
     PRECONDITION = "precondition"
     ACTIVATION = "activation"
     RESPONSE = "response"
     OUTCOME = "outcome"
+
 
 class CheckOutcome(StrEnum):
     PASSED = "passed"
@@ -38,12 +41,14 @@ class CheckOutcome(StrEnum):
     ERROR = "error"
     NOT_EVALUATED = "not_evaluated"
 
+
 class EvidenceSource(StrEnum):
     HARNESS = "harness"
     COMMAND = "command"
     SIMULATOR = "simulator"
     TELEMETRY = "telemetry"
     ULOG = "ulog"
+
 
 class ClockDomain(StrEnum):
     UTC = "utc"

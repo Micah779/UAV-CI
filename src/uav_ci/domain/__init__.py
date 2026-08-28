@@ -1,0 +1,1 @@
+# core simulator-independent domain types for UAV-CI

@@ -1,1 +1,17 @@
+# UAV-CI run artifacts
 /artifacts/
+
+# local python enviornment
+/.venv/
+
+# python bytecode
+__pycache__/
+*.py[cod]
+
+# test and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# macOS
+.DS_Store

@@ -1,0 +1,31 @@
+# tells python tools what this project is
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uav-ci"
+version = "0.1.0"
+description = "Local-first flight assurance harness for PX4 SITL testing"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Micah Aldrich" },
+]
+# no current runtime dependencies
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8"
+]
+
+# look under src/ for packages
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# tests live under tests/
+[tool.pytest.ini_opitons]
+testpaths = ["tests"]
+addopts = "-ra"
