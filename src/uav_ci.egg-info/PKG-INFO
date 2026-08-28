@@ -1,3 +1,15 @@
+Metadata-Version: 2.4
+Name: uav-ci
+Version: 0.1.0
+Summary: Local-first flight assurance harness for PX4 SITL testing
+Author: Micah Aldrich
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Dynamic: license-file
+
 # UAV_CI
 
 UAV-CI is a local-first flight assurance and regression-testing harness for PX4 software-in-the-loop simulations (SITL).

@@ -26,6 +26,6 @@ dev = [
 where = ["src"]
 
 # tests live under tests/
-[tool.pytest.ini_opitons]
+[tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
