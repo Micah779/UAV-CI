@@ -1,10 +1,24 @@
 # typed results produced by UAV-CI assertions
 
 from collections.abc import Sequence
+from datetime import timedelta
 from typing import Self
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from uav_ci.domain.enums import AssertionLayer, CheckOutcome, ResultStatus
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    model_validator,
+)
+
+from uav_ci.domain.enums import (
+    AssertionLayer,
+    CheckOutcome,
+    ResultStatus,
+)
 from uav_ci.domain.evidence import EvidenceRef
 
 class AssertionResult(BaseModel):
@@ -37,7 +51,7 @@ class AssertionResult(BaseModel):
             raise ValueError(
                 "passed and failed assertions must include evidence"
             )
-            
+
         return self
 
 def classify_run(
@@ -117,3 +131,67 @@ def classify_run(
         return ResultStatus.FAIL
 
     return ResultStatus.PASS
+
+class RunResult(BaseModel):
+    # immutable result of one completed UAV-CI run
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        str_strip_whitespace=True,
+    )
+
+    run_id: UUID
+    scenario_id: str = Field(
+        min_length=1,
+        pattern=r"^[a-z][a-z0-9_]*$",
+    )
+    scenario_hash: str = Field(
+        pattern=r"^[a-f0-9]{64}$",
+    )
+    requires_activation: bool
+    started_at: AwareDatetime
+    finished_at: AwareDatetime
+    assertions: tuple[AssertionResult, ...] = ()
+    harness_error: str | None = Field(
+        default=None,
+        min_length=1,
+    )
+    skipped_reason: str | None = Field(
+        default=None,
+        min_length=1,
+    )
+
+    @model_validator(mode="after")
+    def validate_run_context(self) -> Self:
+        if (
+            self.harness_error is not None
+            and self.skipped_reason is not None
+        ):
+            raise ValueError(
+                "a run cannot be both errored and skipped"
+            )
+        if self.started_at.utcoffset() != timedelta(0):
+            raise ValueError("started_at must use UTC")
+
+        if self.finished_at.utcoffset() != timedelta(0):
+            raise ValueError("finished_at must use UTC")
+
+        if self.finished_at < self.started_at:
+            raise ValueError(
+                "finished_at cannot occur before started_at"
+            )
+        
+        return self
+    
+    @computed_field
+    @property
+    def status(self) -> ResultStatus:
+        # compute the final status from immutable run evidence
+
+        return classify_run(
+            self.assertions,
+            requires_activation=self.requires_activation,
+            harness_error=self.harness_error is not None,
+            unsupported_environment=self.skipped_reason is not None,
+        )
