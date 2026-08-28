@@ -85,3 +85,16 @@ def test_assertion_result_is_immutable() -> None:
 
     with pytest.raises(ValidationError):
         result.message = "Changed after evaluation"
+
+def test_invalid_assertion_ids_are_rejected() -> None:
+    for assertion_id in (
+        "2nd_stage",
+        "gnss-loss",
+        "GNSS_loss",
+        "",
+    ):
+        data = valid_assertion_result_data()
+        data["assertion_id"] = assertion_id
+
+        with pytest.raises(ValidationError):
+            AssertionResult.model_validate(data)
