@@ -103,3 +103,37 @@ stimulus:
 A fault scneario always requires activation evidence. A missing or empty activation-check list is rejected before PX4 launches.
 
 The assertion definitions referenced by these IDs will be introduced in a later schema increment.
+
+## Assertions
+
+Assertions describe the checks UAV-CI will evaluate
+
+```yaml
+assertions:
+  - assertion_id: gnss_updates_stopped
+    layer: activation
+    source: telemetry
+    signal: vehicle_gps_position.fix_type
+    operator: less_than
+    expected: 3
+    within_s: 2
+    description: GNSS updates stop after fault injection.
+
+  - assertion_id: vehicle_landed
+    layer: outcome
+    source: ulog
+    signal: vehicle_land_detected.landed
+    operator: equal
+    expected: true
+    description: The vehicle reaches a landed state.
+```
+
+An assertion identifies its validation layer, intended evidence source, signal, comparison operator, expected value, and optimal timing or tolerance.
+
+The `exists` operator checks whether a signal or event was observed and does not use an expected value.
+
+All other operators require an expected value.
+
+Timing must be positive. Numerical tolerance must be nonnegative and may only be used with a numerical expected value.
+
+At this stage, assertion specifications are typed independently. A later schema increment will attach them to   `ScenarioSpec` and validate activation references.

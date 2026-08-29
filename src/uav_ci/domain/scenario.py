@@ -11,6 +11,14 @@ from pydantic import (
     StrictInt,
     field_validator,
     model_validator,
+    StrictBool,
+    StrictStr,
+)
+
+from uav_ci.domain.enums import (
+    AssertionLayer,
+    ComparisonOperator,
+    EvidenceSource,
 )
 
 Identifier = Annotated[
@@ -30,7 +38,15 @@ ParameterName = Annotated[
     ),
 ]
 
-ParameterValue = StrictInt | StrictFloat
+NumericValue = StrictInt | StrictFloat
+ParameterValue = NumericValue
+
+AssertionValue = (
+    StrictBool
+    | StrictInt
+    | StrictFloat
+    | StrictStr
+)
 
 class EnvironmentRef(BaseModel):
     # references one supported execution enviornment
@@ -155,6 +171,78 @@ class ParameterPlan(BaseModel):
 
         return self
 
+
+class AssertionSpec(BaseModel):
+    # defines one declarative scenario assertion
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        str_strip_whitespace=True,
+        allow_inf_nan=False,
+    )
+
+    assertion_id: Identifier
+    layer: AssertionLayer
+    source: EvidenceSource
+    signal: str = Field(min_length=1)
+    operator: ComparisonOperator
+    expected: AssertionValue | None = None
+    within_s: NumericValue | None = None
+    tolerance: NumericValue | None = None
+    description: str = Field(min_length=1)
+
+    @field_validator("within_s")
+    @classmethod
+    def within_s_must_be_positive(
+        cls,
+        value: NumericValue | None,
+    ) -> NumericValue | None:
+        if value is not None and value <= 0:
+            raise ValueError("within_s must be positive")
+
+        return value
+
+    @field_validator("tolerance")
+    @classmethod
+    def tolerance_must_be_nonnegative(
+        cls,
+        value: NumericValue | None,
+    ) -> NumericValue | None:
+        if value is not None and value < 0:
+            raise ValueError("tolerance cannot be negative")
+
+        return value
+
+    @model_validator(mode="after")
+    def validate_operator_fields(self) -> Self:
+        if self.operator is ComparisonOperator.EXISTS:
+            if self.expected is not None:
+                raise ValueError(
+                    "exists assertions cannot define expected"
+                )
+
+            if self.tolerance is not None:
+                raise ValueError(
+                    "exists assertions cannot define tolerance"
+                )
+
+            return self
+
+        if self.expected is None:
+            raise ValueError(
+                "comparison assertions must define expected"
+            )
+
+        if (
+            self.tolerance is not None
+            and type(self.expected) not in {int, float}
+        ):
+            raise ValueError(
+                "tolerance requires a numeric expected value"
+            )
+
+        return self
 
 class NoStimulusSpec(BaseModel):
     # represents a baseline scenario without fault injection
