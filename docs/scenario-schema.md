@@ -136,4 +136,8 @@ All other operators require an expected value.
 
 Timing must be positive. Numerical tolerance must be nonnegative and may only be used with a numerical expected value.
 
-At this stage, assertion specifications are typed independently. A later schema increment will attach them to   `ScenarioSpec` and validate activation references.
+Every scenario must define at least one assertion, and assertion IDs must be unique.
+
+A baseline scenario cannot define activation assertions. A fault scenario's `activation_check_ids` must reference existing assertions whose layer is `activation`. Every activation assertion must be referenced by the stimulus.
+
+Every scenario must also define at least one `response` or `outcome` assertion so that UAV-CI evaluates vehicle behavior after validating the experiment.

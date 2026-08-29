@@ -274,6 +274,17 @@ class FaultStimulusSpec(BaseModel):
         min_length=1,
     )
 
+    @model_validator(mode="after")
+    def activation_check_ids_must_be_unique(self) -> Self:
+        if len(self.activation_check_ids) != len(
+            set(self.activation_check_ids)
+        ):
+            raise ValueError(
+                "activation check IDs must be unique"
+            )
+
+        return self
+
 StimulusSpec = Annotated[
     NoStimulusSpec | FaultStimulusSpec,
     Field(discriminator="type"),
@@ -302,6 +313,9 @@ class ScenarioSpec(BaseModel):
         default_factory=ParameterPlan,
     )
     stimulus: StimulusSpec
+    assertions: tuple[AssertionSpec, ...] = Field(
+        min_length=1,
+    )
 
     @model_validator(mode="after")
     def mission_must_fit_run_timeout(self) -> Self:
@@ -313,6 +327,96 @@ class ScenarioSpec(BaseModel):
         if mission_budget > self.execution.run_timeout_s:
             raise ValueError(
                 "mission time budget cannot exceed run timeout"
+            )
+
+        return self
+
+    # enforces assertion ID uniqueness, baseline, fault reference etc.
+    @model_validator(mode="after")
+    def validate_assertion_contract(self) -> Self:
+        assertion_ids = [
+            assertion.assertion_id
+            for assertion in self.assertions
+        ]
+
+        if len(assertion_ids) != len(set(assertion_ids)):
+            raise ValueError(
+                "assertion IDs must be unique"
+            )
+
+        assertion_by_id = {
+            assertion.assertion_id: assertion
+            for assertion in self.assertions
+        }
+
+        activation_ids = {
+            assertion.assertion_id
+            for assertion in self.assertions
+            if assertion.layer is AssertionLayer.ACTIVATION
+        }
+
+        if isinstance(self.stimulus, NoStimulusSpec):
+            if activation_ids:
+                raise ValueError(
+                    "baseline scenarios cannot define "
+                    "activation assertions"
+                )
+        else:
+            referenced_ids = set(
+                self.stimulus.activation_check_ids
+            )
+
+            missing_ids = (
+                referenced_ids - set(assertion_by_id)
+            )
+            if missing_ids:
+                missing = ", ".join(sorted(missing_ids))
+                raise ValueError(
+                    "activation checks reference undefined "
+                    f"assertions: {missing}"
+                )
+
+            wrong_layer_ids = {
+                assertion_id
+                for assertion_id in referenced_ids
+                if (
+                    assertion_by_id[assertion_id].layer
+                    is not AssertionLayer.ACTIVATION
+                )
+            }
+            if wrong_layer_ids:
+                wrong = ", ".join(
+                    sorted(wrong_layer_ids)
+                )
+                raise ValueError(
+                    "activation checks must reference "
+                    f"activation assertions: {wrong}"
+                )
+
+            unreferenced_ids = (
+                activation_ids - referenced_ids
+            )
+            if unreferenced_ids:
+                unreferenced = ", ".join(
+                    sorted(unreferenced_ids)
+                )
+                raise ValueError(
+                    "activation assertions must be referenced "
+                    f"by the stimulus: {unreferenced}"
+                )
+
+        behavior_layers = {
+            AssertionLayer.RESPONSE,
+            AssertionLayer.OUTCOME,
+        }
+
+        if not any(
+            assertion.layer in behavior_layers
+            for assertion in self.assertions
+        ):
+            raise ValueError(
+                "a scenario must define at least one "
+                "response or outcome assertion"
             )
 
         return self

@@ -19,6 +19,31 @@ from uav_ci.domain.scenario import (
     ScenarioSpec,
 )
 
+def landed_assertion_data() -> dict[str, object]:
+    return {
+        "assertion_id": "vehicle_landed",
+        "layer": "outcome",
+        "source": "ulog",
+        "signal": "vehicle_land_detected.landed",
+        "operator": "equal",
+        "expected": True,
+        "description": "The vehicle reaches a landed state.",
+    }
+
+
+def gnss_activation_assertion_data() -> dict[str, object]:
+    return {
+        "assertion_id": "gnss_updates_stopped",
+        "layer": "activation",
+        "source": "telemetry",
+        "signal": "vehicle_gps_position.fix_type",
+        "operator": "less_than",
+        "expected": 3,
+        "within_s": 2,
+        "description": (
+            "GNSS loss is observed after fault injection."
+        ),
+    }
 
 def baseline_scenario_data() -> dict[str, object]:
     return {
@@ -43,6 +68,9 @@ def baseline_scenario_data() -> dict[str, object]:
         "stimulus": {
             "type": "none",
         },
+        "assertions": [
+            landed_assertion_data(),
+        ]
     }
 
 
@@ -72,6 +100,10 @@ def fault_scenario_data() -> dict[str, object]:
                 "gnss_updates_stopped",
             ],
         },
+        "assertions": [
+            landed_assertion_data(),
+            gnss_activation_assertion_data(),
+        ],
     }
 
 
@@ -180,6 +212,95 @@ def test_mission_budget_cannot_exceed_run_timeout() -> None:
         "file": "missions/baseline.plan",
         "upload_timeout_s": 301,
         "completion_timeout_s": 300,
+    }
+
+    with pytest.raises(ValidationError):
+        ScenarioSpec.model_validate(data)
+
+def test_duplicate_assertion_ids_are_rejected() -> None:
+    data = baseline_scenario_data()
+    data["assertions"] = [
+        landed_assertion_data(),
+        landed_assertion_data(),
+    ]
+
+    with pytest.raises(ValidationError):
+        ScenarioSpec.model_validate(data)
+
+
+def test_unknown_activation_check_is_rejected() -> None:
+    data = fault_scenario_data()
+    data["stimulus"] = {
+        "type": "gnss_loss",
+        "activation_check_ids": [
+            "unknown_activation",
+        ],
+    }
+
+    with pytest.raises(ValidationError):
+        ScenarioSpec.model_validate(data)
+
+
+def test_activation_check_must_use_activation_layer() -> None:
+    data = fault_scenario_data()
+    activation = gnss_activation_assertion_data()
+    activation["layer"] = "response"
+
+    data["assertions"] = [
+        activation,
+        landed_assertion_data(),
+    ]
+
+    with pytest.raises(ValidationError):
+        ScenarioSpec.model_validate(data)
+
+
+def test_unreferenced_activation_assertion_is_rejected() -> None:
+    data = fault_scenario_data()
+    second_activation = gnss_activation_assertion_data()
+    second_activation["assertion_id"] = (
+        "simulator_gnss_disabled"
+    )
+
+    data["assertions"] = [
+        gnss_activation_assertion_data(),
+        second_activation,
+        landed_assertion_data(),
+    ]
+
+    with pytest.raises(ValidationError):
+        ScenarioSpec.model_validate(data)
+
+
+def test_baseline_activation_assertion_is_rejected() -> None:
+    data = baseline_scenario_data()
+    data["assertions"] = [
+        gnss_activation_assertion_data(),
+        landed_assertion_data(),
+    ]
+
+    with pytest.raises(ValidationError):
+        ScenarioSpec.model_validate(data)
+
+
+def test_scenario_without_behavior_assertion_is_rejected() -> None:
+    data = fault_scenario_data()
+    data["assertions"] = [
+        gnss_activation_assertion_data(),
+    ]
+
+    with pytest.raises(ValidationError):
+        ScenarioSpec.model_validate(data)
+
+
+def test_duplicate_activation_check_ids_are_rejected() -> None:
+    data = fault_scenario_data()
+    data["stimulus"] = {
+        "type": "gnss_loss",
+        "activation_check_ids": [
+            "gnss_updates_stopped",
+            "gnss_updates_stopped",
+        ],
     }
 
     with pytest.raises(ValidationError):
