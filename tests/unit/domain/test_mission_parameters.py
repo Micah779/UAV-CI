@@ -96,6 +96,9 @@ def test_invalid_parameter_value_types_are_rejected() -> None:
         True,
         "3",
         "enabled",
+        float("nan"),
+        float("inf"),
+        float("-inf"),
     )
 
     for invalid_value in invalid_values:
