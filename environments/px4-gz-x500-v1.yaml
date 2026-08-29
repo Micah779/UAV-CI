@@ -18,7 +18,7 @@ vehicle:
   model: x500
 
 mavsdk:
-  system_address: udp://:14540
+  system_address: udpin://0.0.0.0:14540
 
 patches:
   - patch_id: x500_enable_wind

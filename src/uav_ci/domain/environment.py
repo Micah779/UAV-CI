@@ -91,7 +91,7 @@ class MavsdkEnvironmentSpec(BaseModel):
         frozen=True,
     )
 
-    system_address: Literal["udp://:14540"]
+    system_address: Literal["udpin://0.0.0.0:14540"]
 
 
 class EnvironmentPatchSpec(BaseModel):

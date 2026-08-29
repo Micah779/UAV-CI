@@ -4,6 +4,7 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 import sys
+import asyncio
 
 from uav_ci.environment import (
     EnvironmentLoadError,
@@ -17,6 +18,10 @@ from uav_ci.scenario import (
 from uav_ci.runtime import (
     preflight_environment,
     prepare_run,
+)
+from uav_ci.vehicle import (
+    VehicleConnectionError,
+    connect_vehicle,
 )
 
 
@@ -99,6 +104,28 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="one-based scenario repetition index",
+    )
+
+    connect_parser = subcommands.add_parser(
+        "connect-check",
+        help=(
+            "prove MAVSDK connectivity to an "
+            "already-running vehicle"
+        ),
+    )
+    connect_parser.add_argument(
+        "environment",
+        type=Path,
+        help="path to the environment profile YAML",
+    )
+    connect_parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=30.0,
+        help=(
+            "maximum time to wait for MAVSDK "
+            "vehicle discovery"
+        ),
     )
 
     return parser
@@ -225,6 +252,59 @@ def prepare_run_command(
 
     return 0 if prepared.ready else 1
 
+def connect_vehicle_command(
+    environment_path: Path,
+    timeout_s: float,
+) -> int:
+    # prove connectivity without commanding the vehicle
+
+    try:
+        loaded_environment = (
+            load_environment_profile(
+                environment_path
+            )
+        )
+    except EnvironmentLoadError as exc:
+        print(
+            f"INVALID ENVIRONMENT: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    system_address = (
+        loaded_environment
+        .profile
+        .mavsdk
+        .system_address
+    )
+
+    try:
+        connected = asyncio.run(
+            connect_vehicle(
+                system_address,
+                timeout_s=timeout_s,
+            )
+        )
+    except (
+        VehicleConnectionError,
+        OSError,
+        ValueError,
+    ) as exc:
+        print(
+            f"CONNECTION FAILED: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("CONNECTION PROVED")
+    print(f"system_address: {system_address}")
+    print(
+        "elapsed_seconds: "
+        f"{connected.elapsed_s:.3f}"
+    )
+
+    return 0
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -251,6 +331,12 @@ def main(
             arguments.px4_repository,
             arguments.runs_root,
             arguments.repetition_index,
+        )
+
+    if arguments.command == "connect-check":
+        return connect_vehicle_command(
+            arguments.environment,
+            arguments.timeout_seconds,
         )
 
     parser.error(

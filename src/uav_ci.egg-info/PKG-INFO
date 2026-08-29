@@ -6,6 +6,7 @@ Author: Micah Aldrich
 Requires-Python: >=3.11
 Description-Content-Type: text/markdown
 License-File: LICENSE
+Requires-Dist: mavsdk<4,>=3.17.2
 Requires-Dist: pydantic<3,>=2.13
 Requires-Dist: PyYAML<7,>=6.0.2
 Provides-Extra: dev
@@ -22,12 +23,15 @@ It will convert manually tested PX4 and Gazebo experiments into reproducible, ma
 
 # Project status
 
-The current implementation establishes:
+The current implementation provides:
 
-- Project structure
-- Shared domain vocabulary
-- Python package configuration
-- Unit-test infrastructure
+- shared typed domain vocabulary
+- immutable scenario and result models
+- activation-first result classification
+- safe YAML scenario loading
+- deterministic scenario hashing
+- a schema-validation CLI
+- unit-test coverage for the foundation
 
 It does not yet launch PX4 or Gazebo
 
@@ -43,14 +47,32 @@ UAV-CI requires Python 3.11 or newer
 
 Create a virtual enviornment:
 
-``bash
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
+```
 
 Install the project and its dev dependencies:
 
+```bash
 python -m pip install -e ".[dev]"
+```
 
-Run the unit tests:
+Run the tests:
 
+```bash
 python -m pytest
+```
+
+Validate a scenarioi without launching PX4
+
+```bash
+uav-ci validate scenarios/baseline.yaml
+```
+
+Verify the installed PX4 and Gazebo environment without launching it:
+
+```bash
+uav-ci preflight environments/px4-gz-x500-v1.yaml \
+  --px4-repository ../PX4-Autopilot
+```

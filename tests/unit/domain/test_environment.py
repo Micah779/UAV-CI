@@ -76,7 +76,7 @@ def known_profile_data() -> dict[str, object]:
             "model": "x500",
         },
         "mavsdk": {
-            "system_address": "udp://:14540",
+            "system_address": "udpin://0.0.0.0:14540",
         },
         "patches": [
             patch_data(),
@@ -102,7 +102,7 @@ def test_committed_environment_profile_is_valid() -> None:
     assert profile.gazebo.version == "8.15.0"
     assert profile.vehicle.model == "x500"
     assert profile.mavsdk.system_address == (
-        "udp://:14540"
+        "udpin://0.0.0.0:14540"
     )
     assert profile.px4.launch_command == (
         "make",

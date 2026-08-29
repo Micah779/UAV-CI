@@ -16,7 +16,7 @@ The profile records:
 - simulator target `gz_x500`
 - Gazebo world `default`
 - vehicle model `x500`
-- MAVSDK address `udp://:14540`
+- MAVSDK address `udpin://0.0.0.0:14540`
 
 The PX4 repository and its submodules must be clean before a run begins. A commit hash does not completely identify an environment when tracked files have local modifications.
 

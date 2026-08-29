@@ -7,6 +7,10 @@ from uav_ci.runtime import (
     EnvironmentPreflightResult,
     PreflightCheckResult,
 )
+from uav_ci.vehicle import (
+    ConnectedVehicle,
+    VehicleConnectionTimeout,
+)
 from types import SimpleNamespace
 
 
@@ -291,3 +295,84 @@ def test_prepare_command_reports_not_ready(
 
     assert exit_code == 1
     assert "ready: false" in captured.out
+
+def test_connect_check_reports_proven_connection(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def fake_connect_vehicle(
+        system_address: str,
+        *,
+        timeout_s: float,
+    ) -> ConnectedVehicle:
+        assert system_address == "udpin://0.0.0.0:14540"
+        assert timeout_s == 12.0
+
+        return ConnectedVehicle(
+            system=SimpleNamespace(),
+            system_address=system_address,
+            elapsed_s=0.25,
+        )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.connect_vehicle",
+        fake_connect_vehicle,
+    )
+
+    exit_code = main(
+        [
+            "connect-check",
+            str(ENVIRONMENT_PROFILE),
+            "--timeout-seconds",
+            "12",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "CONNECTION PROVED" in captured.out
+    assert "system_address: udpin://0.0.0.0:14540" in (
+        captured.out
+    )
+    assert "elapsed_seconds: 0.250" in (
+        captured.out
+    )
+    assert captured.err == ""
+
+
+def test_connect_check_reports_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def fake_connect_vehicle(
+        system_address: str,
+        *,
+        timeout_s: float,
+    ) -> ConnectedVehicle:
+        raise VehicleConnectionTimeout(
+            "test connection timeout"
+        )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.connect_vehicle",
+        fake_connect_vehicle,
+    )
+
+    exit_code = main(
+        [
+            "connect-check",
+            str(ENVIRONMENT_PROFILE),
+            "--timeout-seconds",
+            "1",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "CONNECTION FAILED:" in captured.err
+    assert "test connection timeout" in (
+        captured.err
+    )
