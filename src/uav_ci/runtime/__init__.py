@@ -9,6 +9,13 @@ from uav_ci.runtime.run_directory import (
     RunDirectory,
     create_run_directory,
 )
+from uav_ci.runtime.preflight import (
+    CommandResult,
+    EnvironmentPreflightResult,
+    PreflightCheckResult,
+    preflight_environment,
+    run_command,
+)
 
 __all__ = [
     "RunDirectory",
@@ -16,4 +23,9 @@ __all__ = [
     "create_run_directory",
     "detect_harness_provenance",
     "write_run_manifest",
+    "CommandResult",
+    "EnvironmentPreflightResult",
+    "PreflightCheckResult",
+    "preflight_environment",
+    "run_command",
 ]
