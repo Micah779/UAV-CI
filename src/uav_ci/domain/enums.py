@@ -63,3 +63,9 @@ class ComparisonOperator(StrEnum):
     GREATER_THAN = "greater_than"
     GREATER_THAN_OR_EQUAL = "greater_than_or_equal"
     EXISTS = "exists"
+
+class LogLevel(StrEnum):
+    DEBUG = "debug"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"

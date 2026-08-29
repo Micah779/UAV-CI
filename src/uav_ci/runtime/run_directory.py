@@ -25,6 +25,7 @@ class RunDirectory:
     logs_dir: Path
     evidence_dir: Path
     reports_dir: Path
+    events_path: Path
     manifest_path: Path
     result_path: Path
 
@@ -91,6 +92,7 @@ def create_run_directory(
         logs_dir=logs_dir,
         evidence_dir=evidence_dir,
         reports_dir=reports_dir,
+        events_path=logs_dir / "events.jsonl",
         manifest_path=root / "manifest.json",
         result_path=root / "result.json",
     )

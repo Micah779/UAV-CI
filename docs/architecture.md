@@ -57,3 +57,16 @@ The runtime builds a manifest exclusively from a validated, fingerprinted scenar
 Before publication, the writer verifies that the manifest's run ID, scenario ID, and start time match the destination run directory.
 
 Manifest publication uses a temporary file and an atmoic hard link. An existing `manifest.json` is never overwritten. Consumers therefore observe either no manifest or one complete immutable manifest.
+
+## Structured event log
+
+Each run owns an append-only `logs/events.jsonl` file. Every line is one independently parseable JSON event.
+
+Events include UTC and host-monotonic timestamps, run identity,
+scenario identity, severity, component, event name, message, and typed attributes.
+
+The UTC clock supports correlation and human investigation. The
+monotonic clock supports ordering and duration measurement. Runtime logic must not calculate durations from wall-clock timestamps.
+
+Events are never written into a run directory whose run ID or
+scenario ID differs from the event.

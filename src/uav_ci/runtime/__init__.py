@@ -16,6 +16,11 @@ from uav_ci.runtime.preflight import (
     preflight_environment,
     run_command,
 )
+from uav_ci.runtime.logging import (
+    LogAttribute,
+    StructuredEvent,
+    append_event,
+)
 
 __all__ = [
     "RunDirectory",
@@ -28,4 +33,7 @@ __all__ = [
     "PreflightCheckResult",
     "preflight_environment",
     "run_command",
+    "LogAttribute",
+    "StructuredEvent",
+    "append_event",
 ]
