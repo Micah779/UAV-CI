@@ -1,0 +1,29 @@
+schema_version: 1
+profile_id: px4-gz-x500-v1
+
+px4:
+  repository: PX4-Autopilot
+  revision: e4a0bc726e20a6796c08786e3199771c5c914499
+  description: v1.18.0-beta1-416-ge4a0bc726e
+  gazebo_models_revision: bb0b9cf974acf4f1bcb5f5fcf80b88841562dea9
+  require_clean_worktree: true
+  build_target: px4_sitl
+  simulation_target: gz_x500
+
+gazebo:
+  version: 8.15.0
+  world: default
+
+vehicle:
+  model: x500
+
+mavsdk:
+  system_address: udp://:14540
+
+patches:
+  - patch_id: x500_enable_wind
+    applies_to: wind
+    file: environments/patches/x500-enable-wind.patch
+    sha256: ec27587df8f351b8ea3166c4d8d49c12ffabbd676ecc4cfbde52a1b1e0c71712
+    target: Tools/simulation/gz/models/x500_base/model.sdf
+    description: Enable Gazebo wind effects on the X500 base link.
