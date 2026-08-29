@@ -27,10 +27,14 @@ The manifest contains:
 - deterministic seed
 - start time
 - harness software provenance
+- scenario identity and canonical hash
+- environment profile identity and canonical hash
 
 UAV-CI stores assertion outcomes, retained evidnece, errors, and final classification seperately in `RunResult`.
 
 The manifest and result are linked by `run_id`, `scenario_id`, and `scenario_hash`.
+
+A profile name alone is insufficient provenance because the contents of a profile may change. Every manifest therefore records both the environment profile ID and its canonical SHA-256 hash.
 
 ## Consequences
 

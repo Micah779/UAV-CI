@@ -14,7 +14,7 @@ from uav_ci.domain.manifest import (
 )
 from uav_ci.runtime.run_directory import RunDirectory
 from uav_ci.scenario import LoadedScenario
-
+from uav_ci.environment import LoadedEnvironmentProfile
 
 def detect_harness_provenance() -> HarnessProvenance:
     # describe the installed harness and Python runtime
@@ -28,6 +28,7 @@ def detect_harness_provenance() -> HarnessProvenance:
 
 def build_run_manifest(
     loaded_scenario: LoadedScenario,
+    loaded_environment: LoadedEnvironmentProfile,
     *,
     run_id: UUID,
     started_at: datetime,
@@ -37,6 +38,16 @@ def build_run_manifest(
     # build the manifest for one scenario repetition
 
     scenario = loaded_scenario.scenario
+    environment = loaded_environment.profile
+
+    if (
+        scenario.environment.profile
+        != environment.profile_id
+    ):
+        raise ValueError(
+            "scenario environment profile does not "
+            "match loaded environment"
+        )
 
     if harness is None:
         harness = detect_harness_provenance()
@@ -45,7 +56,8 @@ def build_run_manifest(
         run_id=run_id,
         scenario_id=scenario.scenario_id,
         scenario_hash=loaded_scenario.scenario_hash,
-        environment_profile=scenario.environment.profile,
+        environment_profile=environment.profile_id,
+        environment_hash=loaded_environment.profile_hash,
         requires_activation=scenario.requires_activation,
         repetition_index=repetition_index,
         repetition_count=scenario.execution.repetitions,

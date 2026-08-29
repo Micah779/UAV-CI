@@ -16,14 +16,21 @@ from uav_ci.runtime import (
     detect_harness_provenance,
     write_run_manifest,
 )
+from uav_ci.environment import (
+    load_environment_profile,
+)
 from uav_ci.scenario import load_scenario
-
+from dataclasses import replace
 
 PROJECT_ROOT = Path(__file__).parents[3]
 BASELINE_SCENARIO = (
     PROJECT_ROOT / "scenarios" / "baseline.yaml"
 )
-
+ENVIRONMENT_PROFILE = (
+    PROJECT_ROOT
+    / "environments"
+    / "px4-gz-x500-v1.yaml"
+)
 RUN_ID = UUID(
     "12345678-1234-5678-1234-567812345678"
 )
@@ -48,30 +55,42 @@ TEST_HARNESS = HarnessProvenance(
 
 
 def build_test_context(tmp_path: Path):
-    loaded = load_scenario(BASELINE_SCENARIO)
+    loaded_scenario = load_scenario(
+        BASELINE_SCENARIO
+    )
+    loaded_environment = load_environment_profile(
+        ENVIRONMENT_PROFILE
+    )
 
     run_directory = create_run_directory(
         tmp_path / "runs",
         run_id=RUN_ID,
-        scenario_id=loaded.scenario.scenario_id,
+        scenario_id=(
+            loaded_scenario.scenario.scenario_id
+        ),
         started_at=STARTED_AT,
     )
 
     manifest = build_run_manifest(
-        loaded,
+        loaded_scenario,
+        loaded_environment,
         run_id=RUN_ID,
         started_at=STARTED_AT,
         repetition_index=1,
         harness=TEST_HARNESS,
     )
 
-    return run_directory, manifest
+    return (
+        run_directory,
+        manifest,
+        loaded_environment,
+    )
 
 
 def test_manifest_is_built_from_loaded_scenario(
     tmp_path: Path,
 ) -> None:
-    run_directory, manifest = build_test_context(
+    run_directory, manifest, loaded_environment = build_test_context(
         tmp_path
     )
 
@@ -85,6 +104,9 @@ def test_manifest_is_built_from_loaded_scenario(
     assert manifest.repetition_count == 1
     assert manifest.seed == 42
     assert manifest.harness == TEST_HARNESS
+    assert manifest.environment_hash == (
+        loaded_environment.profile_hash
+    )
 
 
 def test_real_harness_provenance_is_detected() -> None:
@@ -98,7 +120,7 @@ def test_real_harness_provenance_is_detected() -> None:
 def test_manifest_is_written_as_valid_json(
     tmp_path: Path,
 ) -> None:
-    run_directory, manifest = build_test_context(
+    run_directory, manifest, _ = build_test_context(
         tmp_path
     )
 
@@ -123,7 +145,7 @@ def test_manifest_is_written_as_valid_json(
 def test_existing_manifest_is_not_overwritten(
     tmp_path: Path,
 ) -> None:
-    run_directory, manifest = build_test_context(
+    run_directory, manifest, _ = build_test_context(
         tmp_path
     )
 
@@ -154,7 +176,7 @@ def test_existing_manifest_is_not_overwritten(
 def test_manifest_identity_must_match_directory(
     tmp_path: Path,
 ) -> None:
-    run_directory, manifest = build_test_context(
+    run_directory, manifest, _ = build_test_context(
         tmp_path
     )
 
@@ -185,3 +207,37 @@ def test_manifest_identity_must_match_directory(
             )
 
     assert not run_directory.manifest_path.exists()
+
+def test_scenario_and_environment_profiles_must_match(
+) -> None:
+    loaded_scenario = load_scenario(
+        BASELINE_SCENARIO
+    )
+    loaded_environment = load_environment_profile(
+        ENVIRONMENT_PROFILE
+    )
+
+    mismatched_profile = (
+        loaded_environment.profile.model_copy(
+            update={
+                "profile_id": "different-profile",
+            }
+        )
+    )
+    mismatched_environment = replace(
+        loaded_environment,
+        profile=mismatched_profile,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="scenario environment profile",
+    ):
+        build_run_manifest(
+            loaded_scenario,
+            mismatched_environment,
+            run_id=RUN_ID,
+            started_at=STARTED_AT,
+            repetition_index=1,
+            harness=TEST_HARNESS,
+        )

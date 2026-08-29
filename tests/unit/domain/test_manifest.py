@@ -22,6 +22,7 @@ STARTED_AT = datetime(
     tzinfo=timezone.utc,
 )
 SCENARIO_HASH = "a" * 64
+ENVIRONMENT_HASH = "b" * 64
 
 
 def valid_manifest_data() -> dict[str, object]:
@@ -41,6 +42,9 @@ def valid_manifest_data() -> dict[str, object]:
             "python_version": "3.14.7",
             "platform": "macOS-arm64",
         },
+        "environment_profile": "px4-gz-x500-v1",
+        "environment_hash": ENVIRONMENT_HASH,
+        "requires_activation": False,
     }
 
 
@@ -55,6 +59,7 @@ def test_valid_manifest_is_parsed() -> None:
     assert manifest.repetition_index == 1
     assert manifest.repetition_count == 1
     assert manifest.harness.uav_ci_version == "0.1.0"
+    assert manifest.environment_hash == ENVIRONMENT_HASH
 
 
 def test_invalid_repetition_bounds_are_rejected() -> None:
@@ -120,7 +125,22 @@ def test_invalid_scenario_hash_is_rejected() -> None:
 
         with pytest.raises(ValidationError):
             RunManifest.model_validate(data)
+            
+def test_invalid_environment_hash_is_rejected() -> None:
+    invalid_hashes = (
+        "abc123",
+        "B" * 64,
+        "g" * 64,
+        "b" * 63,
+        "b" * 65,
+    )
 
+    for environment_hash in invalid_hashes:
+        data = valid_manifest_data()
+        data["environment_hash"] = environment_hash
+
+        with pytest.raises(ValidationError):
+            RunManifest.model_validate(data)
 
 def test_unsupported_environment_is_rejected() -> None:
     data = valid_manifest_data()

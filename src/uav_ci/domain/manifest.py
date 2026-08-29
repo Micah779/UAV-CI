@@ -16,6 +16,8 @@ from uav_ci.domain.scenario import (
     EnvironmentProfileId,
 )
 
+from uav_ci.domain.environment import Sha256Digest
+
 
 class HarnessProvenance(BaseModel):
     # software environment that created a run
@@ -47,11 +49,10 @@ class RunManifest(BaseModel):
         min_length=1,
         pattern=r"^[a-z][a-z0-9_]*$",
     )
-    scenario_hash: str = Field(
-        pattern=r"^[a-f0-9]{64}$",
-    )
+    scenario_hash: Sha256Digest
 
     environment_profile: EnvironmentProfileId
+    environment_hash: Sha256Digest
     requires_activation: bool = Field(strict=True)
 
     repetition_index: int = Field(
