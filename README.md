@@ -54,3 +54,10 @@ Validate a scenarioi without launching PX4
 ```bash
 uav-ci validate scenarios/baseline.yaml
 ```
+
+Verify the installed PX4 and Gazebo environment without launching it:
+
+```bash
+uav-ci preflight environments/px4-gz-x500-v1.yaml \
+  --px4-repository ../PX4-Autopilot
+```
