@@ -18,6 +18,9 @@ dependencies = [
     "PyYAML>=6.0.2,<7",
 ]
 
+[project.scripts]
+uav-ci = "uav_ci.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8"

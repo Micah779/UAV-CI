@@ -6,6 +6,7 @@ src/uav_ci/cli.py
 src/uav_ci.egg-info/PKG-INFO
 src/uav_ci.egg-info/SOURCES.txt
 src/uav_ci.egg-info/dependency_links.txt
+src/uav_ci.egg-info/entry_points.txt
 src/uav_ci.egg-info/requires.txt
 src/uav_ci.egg-info/top_level.txt
 src/uav_ci/domain/__init__.py

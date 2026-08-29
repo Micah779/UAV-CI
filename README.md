@@ -8,12 +8,15 @@ It will convert manually tested PX4 and Gazebo experiments into reproducible, ma
 
 # Project status
 
-The current implementation establishes:
+The current implementation provides:
 
-- Project structure
-- Shared domain vocabulary
-- Python package configuration
-- Unit-test infrastructure
+- shared typed domain vocabulary
+- immutable scenario and result models
+- activation-first result classification
+- safe YAML scenario loading
+- deterministic scenario hashing
+- a schema-validation CLI
+- unit-test coverage for the foundation
 
 It does not yet launch PX4 or Gazebo
 
@@ -29,14 +32,25 @@ UAV-CI requires Python 3.11 or newer
 
 Create a virtual enviornment:
 
-``bash
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
+```
 
 Install the project and its dev dependencies:
 
+```bash
 python -m pip install -e ".[dev]"
+```
 
-Run the unit tests:
+Run the tests:
 
+```bash
 python -m pytest
+```
+
+Validate a scenarioi without launching PX4
+
+```bash
+uav-ci validate scenarios/baseline.yaml
+```

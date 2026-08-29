@@ -1,0 +1,2 @@
+[console_scripts]
+uav-ci = uav_ci.cli:main

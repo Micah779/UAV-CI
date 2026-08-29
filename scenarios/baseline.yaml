@@ -1,0 +1,36 @@
+# 1st UAV-CI owned scenario definition
+
+schema_version: 1
+scenario_id: baseline_mission
+title: Baseline Mission
+description: Execute the known nominal X500 mission.
+
+environment:
+  profile: px4-gz-x500-v1
+
+execution:
+  startup_timeout_s: 120
+  run_timeout_s: 600
+  repetitions: 1
+  seed: 42
+
+mission:
+  file: missions/baseline.plan
+  upload_timeout_s: 30
+  completion_timeout_s: 300
+
+parameters:
+  overrides: []
+  restore: snapshot
+
+stimulus:
+  type: none
+
+assertions:
+  - assertion_id: vehicle_landed
+    layer: outcome
+    source: ulog
+    signal: vehicle_land_detected.landed
+    operator: equal
+    expected: true
+    description: The vehicle reaches a landed state.
