@@ -16,8 +16,12 @@ from uav_ci.scenario import (
     load_scenario,
 )
 from uav_ci.runtime import (
+    LaunchRejected,
+    ProcessExitedBeforeReady,
+    ProcessReadinessTimeout,
     preflight_environment,
     prepare_run,
+    run_launch_check,
 )
 from uav_ci.vehicle import (
     VehicleConnectionError,
@@ -126,6 +130,49 @@ def build_parser() -> argparse.ArgumentParser:
             "maximum time to wait for MAVSDK "
             "vehicle discovery"
         ),
+    )
+
+    launch_parser = subcommands.add_parser(
+        "launch-check",
+        help=(
+            "prepare, launch, connect, and safely "
+            "stop the supported SITL environment"
+        ),
+    )
+    launch_parser.add_argument(
+        "scenario",
+        type=Path,
+        help="path to the scenario YAML",
+    )
+    launch_parser.add_argument(
+        "--environment",
+        type=Path,
+        required=True,
+        help="path to the environment profile YAML",
+    )
+    launch_parser.add_argument(
+        "--px4-repository",
+        type=Path,
+        required=True,
+        help="path to the PX4-Autopilot checkout",
+    )
+    launch_parser.add_argument(
+        "--runs-root",
+        type=Path,
+        default=Path("artifacts/runs"),
+        help="directory where artifacts are stored",
+    )
+    launch_parser.add_argument(
+        "--startup-timeout-seconds",
+        type=float,
+        default=120.0,
+        help="maximum time for PX4 startup",
+    )
+    launch_parser.add_argument(
+        "--connection-timeout-seconds",
+        type=float,
+        default=30.0,
+        help="maximum time for MAVSDK discovery",
     )
 
     return parser
@@ -305,6 +352,102 @@ def connect_vehicle_command(
 
     return 0
 
+def launch_check_command(
+    scenario_path: Path,
+    environment_path: Path,
+    px4_repository: Path,
+    runs_root: Path,
+    startup_timeout_s: float,
+    connection_timeout_s: float,
+) -> int:
+    # prepare and prove the complete launch lifecycle
+
+    try:
+        prepared = prepare_run(
+            scenario_path,
+            environment_path,
+            px4_repository=px4_repository,
+            runs_root=runs_root,
+        )
+    except (
+        ScenarioLoadError,
+        EnvironmentLoadError,
+        OSError,
+        ValueError,
+    ) as exc:
+        print(
+            f"PREPARATION ERROR: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not prepared.ready:
+        print(
+            "LAUNCH REJECTED: environment "
+            "preflight failed",
+            file=sys.stderr,
+        )
+        print(
+            f"run_directory: "
+            f"{prepared.run_directory.root}",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        result = asyncio.run(
+            run_launch_check(
+                prepared,
+                px4_repository=px4_repository,
+                startup_timeout_s=(
+                    startup_timeout_s
+                ),
+                connection_timeout_s=(
+                    connection_timeout_s
+                ),
+            )
+        )
+    except (
+        LaunchRejected,
+        ProcessExitedBeforeReady,
+        ProcessReadinessTimeout,
+        VehicleConnectionError,
+        OSError,
+        ValueError,
+    ) as exc:
+        print(
+            f"LAUNCH CHECK FAILED: {exc}",
+            file=sys.stderr,
+        )
+        print(
+            f"run_directory: "
+            f"{prepared.run_directory.root}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("LAUNCH CHECK PASSED")
+    print(
+        f"run_directory: "
+        f"{prepared.run_directory.root}"
+    )
+    print(
+        "startup_elapsed_seconds: "
+        f"{result.readiness.elapsed_s:.3f}"
+    )
+    print(
+        "connection_elapsed_seconds: "
+        f"{result.connection_elapsed_s:.3f}"
+    )
+    print(
+        "shutdown_returncode: "
+        f"{result.shutdown_returncode}"
+    )
+
+    return 0
+
+
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -337,6 +480,16 @@ def main(
         return connect_vehicle_command(
             arguments.environment,
             arguments.timeout_seconds,
+        )
+
+    if arguments.command == "launch-check":
+        return launch_check_command(
+            arguments.scenario,
+            arguments.environment,
+            arguments.px4_repository,
+            arguments.runs_root,
+            arguments.startup_timeout_seconds,
+            arguments.connection_timeout_seconds,
         )
 
     parser.error(

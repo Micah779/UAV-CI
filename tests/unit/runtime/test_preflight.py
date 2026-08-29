@@ -114,6 +114,27 @@ def compatible_environment(
         "--version",
     )
 
+    px4_python = (
+        repository
+        / ".venv"
+        / "bin"
+        / "python"
+    )
+    px4_python.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    px4_python.touch()
+
+    px4_python_imports = (
+        str(px4_python),
+        "-c",
+        (
+            "import kconfiglib; "
+            "import menuconfig"
+        ),
+    )
+
     responses = {
         (git_revision, repository): command_result(
             git_revision,
@@ -145,6 +166,12 @@ def compatible_environment(
             make_version,
             stdout="GNU Make 3.81\n",
         ),
+        (
+            px4_python_imports,
+            repository,
+        ): command_result(
+            px4_python_imports,
+        ),
     }
 
     return repository, responses
@@ -174,7 +201,7 @@ def test_matching_environment_passes_preflight(
     )
 
     assert result.passed is True
-    assert len(result.checks) == 8
+    assert len(result.checks) == 10
     assert all(check.passed for check in result.checks)
 
 
@@ -400,4 +427,98 @@ def test_missing_make_is_reported(
     assert checks["make_available"].passed is False
     assert "make not found" in (
         checks["make_available"].observed
+    )
+
+def test_missing_px4_python_is_reported(
+    tmp_path: Path,
+) -> None:
+    repository, responses = (
+        compatible_environment(tmp_path)
+    )
+    environment = load_environment_profile(
+        PROFILE_PATH
+    )
+
+    px4_python = (
+        repository
+        / ".venv"
+        / "bin"
+        / "python"
+    )
+    px4_python.unlink()
+
+    result = preflight_environment(
+        environment,
+        px4_repository=repository,
+        runner=FakeRunner(responses),
+    )
+
+    checks = checks_by_id(result)
+
+    assert result.passed is False
+    assert (
+        checks["px4_python_exists"].passed
+        is False
+    )
+    assert (
+        "px4_python_dependencies"
+        not in checks
+    )
+
+
+def test_broken_px4_python_dependencies_are_reported(
+    tmp_path: Path,
+) -> None:
+    repository, responses = (
+        compatible_environment(tmp_path)
+    )
+    environment = load_environment_profile(
+        PROFILE_PATH
+    )
+
+    px4_python = (
+        repository
+        / ".venv"
+        / "bin"
+        / "python"
+    )
+    import_command = (
+        str(px4_python),
+        "-c",
+        (
+            "import kconfiglib; "
+            "import menuconfig"
+        ),
+    )
+
+    responses[
+        (import_command, repository)
+    ] = command_result(
+        import_command,
+        returncode=1,
+        stderr=(
+            "ModuleNotFoundError: "
+            "No module named 'menuconfig'"
+        ),
+    )
+
+    result = preflight_environment(
+        environment,
+        px4_repository=repository,
+        runner=FakeRunner(responses),
+    )
+
+    checks = checks_by_id(result)
+
+    assert result.passed is False
+    assert (
+        checks[
+            "px4_python_dependencies"
+        ].passed
+        is False
+    )
+    assert "ModuleNotFoundError" in (
+        checks[
+            "px4_python_dependencies"
+        ].observed
     )

@@ -256,3 +256,44 @@ def test_existing_process_logs_are_not_overwritten(
         ) == original_output
 
     asyncio.run(exercise())
+
+def test_explicit_process_environment_is_used(
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        run_directory = create_test_run(tmp_path)
+        spec = process_spec(
+            tmp_path,
+            (
+                sys.executable,
+                "-c",
+                (
+                    "import os; "
+                    "print("
+                    "os.environ['UAV_CI_TEST_VALUE']"
+                    ")"
+                ),
+            ),
+        )
+
+        managed = await start_managed_process(
+            run_directory,
+            spec,
+            environment={
+                "UAV_CI_TEST_VALUE": (
+                    "px4-environment"
+                ),
+            },
+        )
+
+        returncode = await wait_managed_process(
+            managed,
+            timeout_s=5,
+        )
+
+        assert returncode == 0
+        assert managed.stdout_path.read_text(
+            encoding="utf-8"
+        ).strip() == "px4-environment"
+
+    asyncio.run(exercise())

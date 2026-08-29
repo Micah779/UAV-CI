@@ -7,6 +7,7 @@ from pathlib import Path
 import signal
 from time import monotonic
 from typing import Literal
+from collections.abc import Mapping
 
 from pydantic import (
     BaseModel,
@@ -88,6 +89,8 @@ class ProcessReadinessTimeout(TimeoutError):
 async def start_managed_process(
     run_directory: RunDirectory,
     spec: ProcessSpec,
+    *,
+    environment: Mapping[str, str] | None = None,
 ) -> ManagedProcess:
     # start one process in an isolated process group
 
@@ -119,6 +122,11 @@ async def start_managed_process(
             stdout=stdout_file,
             stderr=stderr_file,
             start_new_session=True,
+            env=(
+                dict(environment)
+                if environment is not None
+                else None
+            ),
         )
     finally:
         stdout_file.close()

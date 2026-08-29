@@ -376,3 +376,113 @@ def test_connect_check_reports_timeout(
     assert "test connection timeout" in (
         captured.err
     )
+
+def test_launch_check_command_reports_success(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    prepared = SimpleNamespace(
+        ready=True,
+        run_directory=SimpleNamespace(
+            root=tmp_path / "run",
+        ),
+    )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.prepare_run",
+        lambda *_args, **_kwargs: prepared,
+    )
+
+    async def fake_launch_check(
+        received_prepared,
+        *,
+        px4_repository,
+        startup_timeout_s,
+        connection_timeout_s,
+    ):
+        assert received_prepared is prepared
+        assert startup_timeout_s == 90.0
+        assert connection_timeout_s == 20.0
+
+        return SimpleNamespace(
+            readiness=SimpleNamespace(
+                elapsed_s=2.5
+            ),
+            connection_elapsed_s=0.25,
+            shutdown_returncode=-15,
+        )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.run_launch_check",
+        fake_launch_check,
+    )
+
+    exit_code = main(
+        [
+            "launch-check",
+            str(BASELINE_SCENARIO),
+            "--environment",
+            str(ENVIRONMENT_PROFILE),
+            "--px4-repository",
+            str(TEST_PX4_REPOSITORY),
+            "--runs-root",
+            str(tmp_path / "runs"),
+            "--startup-timeout-seconds",
+            "90",
+            "--connection-timeout-seconds",
+            "20",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "LAUNCH CHECK PASSED" in captured.out
+    assert (
+        "startup_elapsed_seconds: 2.500"
+        in captured.out
+    )
+    assert (
+        "connection_elapsed_seconds: 0.250"
+        in captured.out
+    )
+    assert "shutdown_returncode: -15" in (
+        captured.out
+    )
+    assert captured.err == ""
+
+
+def test_launch_check_rejects_failed_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    prepared = SimpleNamespace(
+        ready=False,
+        run_directory=SimpleNamespace(
+            root=tmp_path / "run",
+        ),
+    )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.prepare_run",
+        lambda *_args, **_kwargs: prepared,
+    )
+
+    exit_code = main(
+        [
+            "launch-check",
+            str(BASELINE_SCENARIO),
+            "--environment",
+            str(ENVIRONMENT_PROFILE),
+            "--px4-repository",
+            str(TEST_PX4_REPOSITORY),
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "LAUNCH REJECTED" in captured.err

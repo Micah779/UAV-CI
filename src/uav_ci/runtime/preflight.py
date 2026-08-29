@@ -243,6 +243,66 @@ def preflight_environment(
             )
         )
 
+        px4_python = (
+            repository
+            / ".venv"
+            / "bin"
+            / "python"
+        )
+        px4_python_exists = px4_python.is_file()
+
+        checks.append(
+            PreflightCheckResult(
+                check_id="px4_python_exists",
+                passed=px4_python_exists,
+                expected="file exists",
+                observed=(
+                    "file exists"
+                    if px4_python_exists
+                    else "file missing"
+                ),
+            )
+        )
+
+        if px4_python_exists:
+            import_command = (
+                str(px4_python),
+                "-c",
+                (
+                    "import kconfiglib; "
+                    "import menuconfig"
+                ),
+            )
+            import_result = runner(
+                import_command,
+                repository,
+            )
+
+            checks.append(
+                PreflightCheckResult(
+                    check_id=(
+                        "px4_python_dependencies"
+                    ),
+                    passed=(
+                        import_result.returncode
+                        == 0
+                    ),
+                    expected=(
+                        "kconfiglib and menuconfig "
+                        "import successfully"
+                    ),
+                    observed=(
+                        "imports succeeded"
+                        if import_result.returncode
+                        == 0
+                        else _observed_output(
+                            import_result
+                        )
+                    ),
+                    command=import_command,
+                )
+            )
+
     gazebo_models_directory = (
         repository / "Tools" / "simulation" / "gz"
     )

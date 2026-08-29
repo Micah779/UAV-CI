@@ -39,6 +39,13 @@ from uav_ci.runtime.prepare import (
     prepare_run,
     snapshot_run_inputs,
 )
+from uav_ci.runtime.launch import (
+    LaunchCheckResult,
+    LaunchRejected,
+    RunningEnvironment,
+    managed_environment,
+    run_launch_check,
+)
 
 __all__ = [
     "RunDirectory",
@@ -68,4 +75,9 @@ __all__ = [
     "prepare_run",
     "snapshot_run_inputs",
     "CommandRunner",
+    "LaunchCheckResult",
+    "LaunchRejected",
+    "RunningEnvironment",
+    "managed_environment",
+    "run_launch_check",
 ]
