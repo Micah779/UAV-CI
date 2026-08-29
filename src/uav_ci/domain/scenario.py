@@ -38,6 +38,10 @@ ParameterName = Annotated[
     ),
 ]
 
+EnvironmentProfileId = Literal[
+    "px4-gz-x500-v1",
+]
+
 NumericValue = StrictInt | StrictFloat
 ParameterValue = NumericValue
 
@@ -56,7 +60,7 @@ class EnvironmentRef(BaseModel):
         frozen=True,
     )
 
-    profile: Literal["px4-gz-x500-v1"]
+    profile: EnvironmentProfileId
 
 
 class ExecutionSpec(BaseModel):
