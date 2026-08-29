@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 import signal
+from time import monotonic
+from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -62,6 +64,25 @@ class ManagedProcess:
     stdout_path: Path
     stderr_path: Path
 
+@dataclass(frozen=True, slots=True)
+class ReadinessMatch:
+    # the log observation that proved readiness
+
+    process_id: str
+    stream: Literal["stdout", "stderr"]
+    marker: str
+    matched_line: str
+    elapsed_s: float
+
+
+class ProcessExitedBeforeReady(RuntimeError):
+    # raised when a process exits before readiness
+    pass
+
+
+class ProcessReadinessTimeout(TimeoutError):
+    # raised when readiness is not proven in time
+    pass
 
 # start a managed process
 async def start_managed_process(
@@ -134,10 +155,106 @@ async def wait_managed_process(
         ) from exc
 
 
+async def wait_for_process_readiness(
+    managed: ManagedProcess,
+    *,
+    marker: str,
+    timeout_s: float,
+    poll_interval_s: float = 0.05,
+) -> ReadinessMatch:
+    # wait until stdout or stderr proves readiness
+
+    if not marker:
+        raise ValueError(
+            "readiness marker cannot be empty"
+        )
+
+    if timeout_s <= 0:
+        raise ValueError(
+            "readiness timeout must be positive"
+        )
+
+    if poll_interval_s <= 0:
+        raise ValueError(
+            "poll interval must be positive"
+        )
+
+    started = monotonic()
+    deadline = started + timeout_s
+
+    while True:
+        stream_logs = (
+            (
+                "stdout",
+                _read_process_log(
+                    managed.stdout_path
+                ),
+            ),
+            (
+                "stderr",
+                _read_process_log(
+                    managed.stderr_path
+                ),
+            ),
+        )
+
+        for stream, contents in stream_logs:
+            if marker in contents:
+                matched_line = next(
+                    (
+                        line
+                        for line in contents.splitlines()
+                        if marker in line
+                    ),
+                    marker,
+                )
+
+                return ReadinessMatch(
+                    process_id=(
+                        managed.spec.process_id
+                    ),
+                    stream=stream,
+                    marker=marker,
+                    matched_line=matched_line,
+                    elapsed_s=monotonic() - started,
+                )
+
+        if managed.process.returncode is not None:
+            combined_output = "\n".join(
+                contents
+                for _, contents in stream_logs
+                if contents
+            )
+            output_tail = combined_output[-1000:]
+
+            raise ProcessExitedBeforeReady(
+                f"process {managed.spec.process_id} "
+                "exited before readiness with code "
+                f"{managed.process.returncode}; "
+                f"output tail: {output_tail!r}"
+            )
+
+        remaining_s = deadline - monotonic()
+
+        if remaining_s <= 0:
+            raise ProcessReadinessTimeout(
+                f"process {managed.spec.process_id} "
+                f"did not produce marker {marker!r} "
+                f"within {timeout_s} seconds"
+            )
+
+        await asyncio.sleep(
+            min(
+                poll_interval_s,
+                remaining_s,
+            )
+        )
+
 # add bounded process group shutdown
 async def stop_managed_process(
     managed: ManagedProcess,
 ) -> int:
+
     # stop a process group, escalating if necessary
 
     process = managed.process
@@ -168,3 +285,15 @@ async def stop_managed_process(
             pass
 
         return await process.wait()
+
+
+def _read_process_log(path: Path) -> str:
+    # read a growing process log safely
+
+    try:
+        return path.read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError:
+        return ""

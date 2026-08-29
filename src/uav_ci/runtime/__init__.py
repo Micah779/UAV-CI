@@ -27,6 +27,10 @@ from uav_ci.runtime.process import (
     start_managed_process,
     stop_managed_process,
     wait_managed_process,
+    ProcessExitedBeforeReady,
+    ProcessReadinessTimeout,
+    ReadinessMatch,
+    wait_for_process_readiness,
 )
 
 __all__ = [
@@ -48,4 +52,8 @@ __all__ = [
     "start_managed_process",
     "stop_managed_process",
     "wait_managed_process",
+    "ProcessExitedBeforeReady",
+    "ProcessReadinessTimeout",
+    "ReadinessMatch",
+    "wait_for_process_readiness",
 ]

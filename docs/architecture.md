@@ -78,3 +78,12 @@ External programs are launched with argument tuples and without a shell. Each pr
 Managed processes start in a new operating-system session so their process groups can be terminated together. Cleanup first sends `SIGTERM`, waits for a bounded interval, and escalates to `SIGKILL` only when necessary.
 
 Process log files are never overwritten. Readiness detection is a separate concern and will be layered on top of this lifecycle primitive.
+
+## Process readiness
+
+Starting a process does not prove that the service it provides is ready. Readiness must be established separately from process
+creation.
+
+The initial readiness mechanism searches retained stdout and stderr for a declared literal marker within a bounded interval. It reports the exact stream and matching line that proved readiness.
+
+An early process exit and a readiness timeout are distinct failures. Readiness failure does not transfer process ownership; the caller must still execute bounded cleanup.
