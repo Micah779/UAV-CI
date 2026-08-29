@@ -46,6 +46,10 @@ from uav_ci.runtime.launch import (
     managed_environment,
     run_launch_check,
 )
+from uav_ci.runtime.health import (
+    HealthCheckResult,
+    run_health_check,
+)
 
 __all__ = [
     "RunDirectory",
@@ -80,4 +84,6 @@ __all__ = [
     "RunningEnvironment",
     "managed_environment",
     "run_launch_check",
+    "HealthCheckResult",
+    "run_health_check",
 ]

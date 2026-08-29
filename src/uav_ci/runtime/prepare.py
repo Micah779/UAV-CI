@@ -2,13 +2,14 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from hashlib import sha256
 import hmac
 from pathlib import Path
 from time import monotonic_ns
 from uuid import UUID, uuid4
 
+from uav_ci.clocks import utc_now
 from uav_ci.domain.environment import EnvironmentProfile
 from uav_ci.domain.manifest import (
     HarnessProvenance,
@@ -69,13 +70,6 @@ class PreparedRun:
     @property
     def ready(self) -> bool:
         return self.preflight.passed
-
-
-def utc_now() -> datetime:
-    # return the current timezone-aware UTC time
-
-    return datetime.now(timezone.utc)
-
 
 # sanpshot validated inputs
 def snapshot_run_inputs(

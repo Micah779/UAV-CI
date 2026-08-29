@@ -77,6 +77,14 @@ def test_run_directory_structure_is_created(
     assert run_directory.preflight_path == (
         run_directory.evidence_dir / "preflight.json"
     )
+    assert (
+        run_directory.vehicle_preconditions_path
+        == run_directory.evidence_dir
+        / "vehicle_preconditions.json"
+    )
+    assert not (
+        run_directory.vehicle_preconditions_path.exists()
+    )
 
     assert not run_directory.scenario_snapshot_path.exists()
     assert not run_directory.environment_snapshot_path.exists()

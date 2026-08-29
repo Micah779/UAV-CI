@@ -32,6 +32,7 @@ class RunDirectory:
     scenario_snapshot_path: Path
     environment_snapshot_path: Path
     preflight_path: Path
+    vehicle_preconditions_path: Path
 
 def create_run_directory(
     runs_root: str | Path,
@@ -111,5 +112,7 @@ def create_run_directory(
         events_path=logs_dir / "events.jsonl",
         manifest_path=root / "manifest.json",
         result_path=root / "result.json",
-
+        vehicle_preconditions_path=(
+            evidence_dir / "vehicle_preconditions.json"
+        ),
     )

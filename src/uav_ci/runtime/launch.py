@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from time import monotonic_ns
+from uav_ci.clocks import utc_now
 
 from uav_ci.domain.environment import (
     EnvironmentProfile,
@@ -20,10 +21,7 @@ from uav_ci.runtime.logging import (
     StructuredEvent,
     append_event,
 )
-from uav_ci.runtime.prepare import (
-    PreparedRun,
-    utc_now,
-)
+from uav_ci.runtime.prepare import PreparedRun
 from uav_ci.runtime.process import (
     ManagedProcess,
     ProcessSpec,

@@ -22,10 +22,12 @@ from uav_ci.runtime import (
     preflight_environment,
     prepare_run,
     run_launch_check,
+    run_health_check,
 )
 from uav_ci.vehicle import (
     VehicleConnectionError,
     connect_vehicle,
+    VehiclePreconditionError,
 )
 
 
@@ -173,6 +175,42 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=30.0,
         help="maximum time for MAVSDK discovery",
+    )
+    health_parser = subcommands.add_parser(
+        "health-check",
+        help=(
+            "launch SITL and prove safe vehicle "
+            "preconditions without arming"
+        ),
+    )
+    health_parser.add_argument(
+        "scenario",
+        type=Path,
+        help="path to the scenario YAML",
+    )
+    health_parser.add_argument(
+        "--environment",
+        type=Path,
+        required=True,
+        help="path to the environment profile YAML",
+    )
+    health_parser.add_argument(
+        "--px4-repository",
+        type=Path,
+        required=True,
+        help="path to the PX4-Autopilot checkout",
+    )
+    health_parser.add_argument(
+        "--runs-root",
+        type=Path,
+        default=Path("artifacts/runs"),
+        help="directory where artifacts are stored",
+    )
+    health_parser.add_argument(
+        "--health-timeout-seconds",
+        type=float,
+        default=60.0,
+        help="maximum time to prove preconditions",
     )
 
     return parser
@@ -446,6 +484,96 @@ def launch_check_command(
 
     return 0
 
+def health_check_command(
+    scenario_path: Path,
+    environment_path: Path,
+    px4_repository: Path,
+    runs_root: Path,
+    health_timeout_s: float,
+) -> int:
+    # prove flight preconditions without arming
+
+    try:
+        prepared = prepare_run(
+            scenario_path,
+            environment_path,
+            px4_repository=px4_repository,
+            runs_root=runs_root,
+        )
+    except (
+        ScenarioLoadError,
+        EnvironmentLoadError,
+        OSError,
+        ValueError,
+    ) as exc:
+        print(
+            f"PREPARATION ERROR: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not prepared.ready:
+        print(
+            "HEALTH CHECK REJECTED: environment "
+            "preflight failed",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        result = asyncio.run(
+            run_health_check(
+                prepared,
+                px4_repository=px4_repository,
+                health_timeout_s=health_timeout_s,
+            )
+        )
+    except (
+        LaunchRejected,
+        ProcessExitedBeforeReady,
+        ProcessReadinessTimeout,
+        VehicleConnectionError,
+        VehiclePreconditionError,
+        OSError,
+        ValueError,
+    ) as exc:
+        print(
+            f"HEALTH CHECK FAILED: {exc}",
+            file=sys.stderr,
+        )
+        print(
+            f"run_directory: "
+            f"{prepared.run_directory.root}",
+            file=sys.stderr,
+        )
+        return 1
+
+    preconditions = result.preconditions
+
+    print(
+        "HEALTH CHECK "
+        + (
+            "PASSED"
+            if preconditions.passed
+            else "NOT READY"
+        )
+    )
+    print(
+        f"run_directory: "
+        f"{prepared.run_directory.root}"
+    )
+    print(f"armable: {preconditions.armable}")
+    print(f"armed: {preconditions.armed}")
+    print(
+        f"landed_state: "
+        f"{preconditions.landed_state}"
+    )
+    print(
+        f"evidence: "
+        f"{prepared.run_directory.vehicle_preconditions_path}"
+    )
+
+    return 0 if preconditions.passed else 1
 
 
 def main(
@@ -490,6 +618,14 @@ def main(
             arguments.runs_root,
             arguments.startup_timeout_seconds,
             arguments.connection_timeout_seconds,
+        )
+    if arguments.command == "health-check":
+        return health_check_command(
+            arguments.scenario,
+            arguments.environment,
+            arguments.px4_repository,
+            arguments.runs_root,
+            arguments.health_timeout_seconds,
         )
 
     parser.error(
