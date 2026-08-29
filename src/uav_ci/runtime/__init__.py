@@ -21,6 +21,13 @@ from uav_ci.runtime.logging import (
     StructuredEvent,
     append_event,
 )
+from uav_ci.runtime.process import (
+    ManagedProcess,
+    ProcessSpec,
+    start_managed_process,
+    stop_managed_process,
+    wait_managed_process,
+)
 
 __all__ = [
     "RunDirectory",
@@ -36,4 +43,9 @@ __all__ = [
     "LogAttribute",
     "StructuredEvent",
     "append_event",
+    "ManagedProcess",
+    "ProcessSpec",
+    "start_managed_process",
+    "stop_managed_process",
+    "wait_managed_process",
 ]

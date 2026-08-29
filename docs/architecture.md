@@ -70,3 +70,11 @@ monotonic clock supports ordering and duration measurement. Runtime logic must n
 
 Events are never written into a run directory whose run ID or
 scenario ID differs from the event.
+
+## Managed process boundary
+
+External programs are launched with argument tuples and without a shell. Each process receives separate append-only stdout and stderr files under the run's `logs/` directory.
+
+Managed processes start in a new operating-system session so their process groups can be terminated together. Cleanup first sends `SIGTERM`, waits for a bounded interval, and escalates to `SIGKILL` only when necessary.
+
+Process log files are never overwritten. Readiness detection is a separate concern and will be layered on top of this lifecycle primitive.
