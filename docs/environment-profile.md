@@ -36,3 +36,21 @@ UAV-CI must not apply this patch directly to the shared PX4 checkout. The future
 
 A wind scenario must still prove that wind was activated before
 evaluating vehicle response.
+
+## Validation and identity
+
+Environment files are parsed with PyYAML's safe loader and validated
+through the immutable `EnvironmentProfile` model.
+
+Every declared patch must exist beneath the UAV-CI repository and
+match its declared SHA-256 digest. A missing or modified patch makes
+the environment invalid.
+
+The validated profile is serialized as canonical JSON and assigned a
+SHA-256 environment hash. Comments, whitespace, and YAML mapping-key
+order do not affect this identity.
+
+The environment hash identifies declared configuration. Runtime
+preflight must separately prove that the installed PX4 revision,
+submodule revision, Gazebo version, and clean-worktree state match the
+profile.
