@@ -60,6 +60,10 @@ def test_run_directory_structure_is_created(
     assert not run_directory.manifest_path.exists()
     assert not run_directory.result_path.exists()
 
+    assert run_directory.run_id == RUN_ID
+    assert run_directory.scenario_id == "baseline_mission"
+    assert run_directory.started_at == STARTED_AT
+
 
 def test_existing_run_directory_is_not_overwritten(
     tmp_path: Path,

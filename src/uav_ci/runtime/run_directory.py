@@ -16,6 +16,10 @@ SCENARIO_ID_PATTERN = re.compile(
 class RunDirectory:
     # filesystem locations owned by one UAV-CI run
 
+    run_id: UUID
+    scenario_id: str
+    started_at: datetime
+
     root: Path
     inputs_dir: Path
     logs_dir: Path
@@ -79,6 +83,9 @@ def create_run_directory(
         directory.mkdir()
 
     return RunDirectory(
+        run_id=run_id,
+        scenario_id=scenario_id,
+        started_at=started_at,
         root=root,
         inputs_dir=inputs_dir,
         logs_dir=logs_dir,

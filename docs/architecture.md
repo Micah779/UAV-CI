@@ -49,3 +49,11 @@ The directories have these responsibilities:
 - `result.json` records the classified run result.
 
 A run directory must never overwrite an existing run.
+
+## Manifest publication
+
+The runtime builds a manifest exclusively from a validated, fingerprinted scenario and explcit run identity.
+
+Before publication, the writer verifies that the manifest's run ID, scenario ID, and start time match the destination run directory.
+
+Manifest publication uses a temporary file and an atmoic hard link. An existing `manifest.json` is never overwritten. Consumers therefore observe either no manifest or one complete immutable manifest.
