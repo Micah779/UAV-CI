@@ -15,6 +15,7 @@ from uav_ci.runtime.preflight import (
     PreflightCheckResult,
     preflight_environment,
     run_command,
+    CommandRunner,
 )
 from uav_ci.runtime.logging import (
     LogAttribute,
@@ -31,6 +32,12 @@ from uav_ci.runtime.process import (
     ProcessReadinessTimeout,
     ReadinessMatch,
     wait_for_process_readiness,
+)
+from uav_ci.runtime.prepare import (
+    InputSnapshots,
+    PreparedRun,
+    prepare_run,
+    snapshot_run_inputs,
 )
 
 __all__ = [
@@ -56,4 +63,9 @@ __all__ = [
     "ProcessReadinessTimeout",
     "ReadinessMatch",
     "wait_for_process_readiness",
+    "InputSnapshots",
+    "PreparedRun",
+    "prepare_run",
+    "snapshot_run_inputs",
+    "CommandRunner",
 ]

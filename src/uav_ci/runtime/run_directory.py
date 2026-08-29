@@ -28,7 +28,10 @@ class RunDirectory:
     events_path: Path
     manifest_path: Path
     result_path: Path
-
+    input_patches_dir: Path
+    scenario_snapshot_path: Path
+    environment_snapshot_path: Path
+    preflight_path: Path
 
 def create_run_directory(
     runs_root: str | Path,
@@ -74,6 +77,7 @@ def create_run_directory(
     logs_dir = root / "logs"
     evidence_dir = root / "evidence"
     reports_dir = root / "reports"
+    input_patches_dir = inputs_dir / "patches"
 
     for directory in (
         inputs_dir,
@@ -83,16 +87,29 @@ def create_run_directory(
     ):
         directory.mkdir()
 
+    input_patches_dir.mkdir()
+
     return RunDirectory(
         run_id=run_id,
         scenario_id=scenario_id,
         started_at=started_at,
         root=root,
         inputs_dir=inputs_dir,
+        input_patches_dir=input_patches_dir,
         logs_dir=logs_dir,
         evidence_dir=evidence_dir,
         reports_dir=reports_dir,
+        scenario_snapshot_path=(
+            inputs_dir / "scenario.json"
+        ),
+        environment_snapshot_path=(
+            inputs_dir / "environment.json"
+        ),
+        preflight_path=(
+            evidence_dir / "preflight.json"
+        ),
         events_path=logs_dir / "events.jsonl",
         manifest_path=root / "manifest.json",
         result_path=root / "result.json",
+
     )

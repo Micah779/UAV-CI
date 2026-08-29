@@ -67,7 +67,20 @@ def test_run_directory_structure_is_created(
         run_directory.logs_dir / "events.jsonl"
     )
     assert not run_directory.events_path.exists()
+    assert run_directory.input_patches_dir.is_dir()
+    assert run_directory.scenario_snapshot_path == (
+        run_directory.inputs_dir / "scenario.json"
+    )
+    assert run_directory.environment_snapshot_path == (
+        run_directory.inputs_dir / "environment.json"
+    )
+    assert run_directory.preflight_path == (
+        run_directory.evidence_dir / "preflight.json"
+    )
 
+    assert not run_directory.scenario_snapshot_path.exists()
+    assert not run_directory.environment_snapshot_path.exists()
+    assert not run_directory.preflight_path.exists()
 
 def test_existing_run_directory_is_not_overwritten(
     tmp_path: Path,

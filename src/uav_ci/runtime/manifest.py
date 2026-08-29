@@ -2,11 +2,13 @@
 
 from datetime import datetime
 from importlib.metadata import version
-import os
 from pathlib import Path
 import platform
-from tempfile import mkstemp
 from uuid import UUID
+
+from uav_ci.runtime.files import (
+    publish_text_exclusively,
+)
 
 from uav_ci.domain.manifest import (
     HarnessProvenance,
@@ -66,38 +68,6 @@ def build_run_manifest(
         harness=harness,
     )
 
-
-def _write_text_exclusively(
-    target: Path,
-    contents: str,
-) -> None:
-    # atomically publish text without overwriting a file
-
-    file_descriptor, temporary_name = mkstemp(
-        dir=target.parent,
-        prefix=f".{target.name}.",
-        suffix=".tmp",
-    )
-    temporary_path = Path(temporary_name)
-
-    try:
-        with os.fdopen(
-            file_descriptor,
-            mode="w",
-            encoding="utf-8",
-            newline="\n",
-        ) as temporary_file:
-            temporary_file.write(contents)
-            temporary_file.flush()
-            os.fsync(temporary_file.fileno())
-
-        # A hard link publishes the complete file and fails
-        # atomically if the target already exists.
-        os.link(temporary_path, target)
-    finally:
-        temporary_path.unlink(missing_ok=True)
-
-
 def write_run_manifest(
     run_directory: RunDirectory,
     manifest: RunManifest,
@@ -123,7 +93,7 @@ def write_run_manifest(
 
     contents = manifest.model_dump_json(indent=2) + "\n"
 
-    _write_text_exclusively(
+    publish_text_exclusively(
         run_directory.manifest_path,
         contents,
     )

@@ -7,6 +7,7 @@ from uav_ci.runtime import (
     EnvironmentPreflightResult,
     PreflightCheckResult,
 )
+from types import SimpleNamespace
 
 
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -207,3 +208,86 @@ def test_preflight_command_rejects_invalid_profile(
     assert exit_code == 1
     assert captured.out == ""
     assert "INVALID ENVIRONMENT:" in captured.err
+
+def test_prepare_command_reports_ready_run(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    fake_run_directory = SimpleNamespace(
+        root=tmp_path / "run",
+        manifest_path=tmp_path / "run/manifest.json",
+        preflight_path=tmp_path / "run/evidence/preflight.json",
+    )
+    fake_prepared = SimpleNamespace(
+        manifest=SimpleNamespace(
+            scenario_id="baseline_mission"
+        ),
+        run_directory=fake_run_directory,
+        ready=True,
+    )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.prepare_run",
+        lambda *_args, **_kwargs: fake_prepared,
+    )
+
+    exit_code = main(
+        [
+            "prepare",
+            str(BASELINE_SCENARIO),
+            "--environment",
+            str(ENVIRONMENT_PROFILE),
+            "--px4-repository",
+            str(TEST_PX4_REPOSITORY),
+            "--runs-root",
+            str(tmp_path / "runs"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "PREPARED: baseline_mission" in captured.out
+    assert "ready: true" in captured.out
+
+
+def test_prepare_command_reports_not_ready(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    fake_prepared = SimpleNamespace(
+        manifest=SimpleNamespace(
+            scenario_id="baseline_mission"
+        ),
+        run_directory=SimpleNamespace(
+            root=tmp_path / "run",
+            manifest_path=tmp_path / "run/manifest.json",
+            preflight_path=(
+                tmp_path / "run/evidence/preflight.json"
+            ),
+        ),
+        ready=False,
+    )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.prepare_run",
+        lambda *_args, **_kwargs: fake_prepared,
+    )
+
+    exit_code = main(
+        [
+            "prepare",
+            str(BASELINE_SCENARIO),
+            "--environment",
+            str(ENVIRONMENT_PROFILE),
+            "--px4-repository",
+            str(TEST_PX4_REPOSITORY),
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "ready: false" in captured.out

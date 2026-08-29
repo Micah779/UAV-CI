@@ -14,6 +14,10 @@ from uav_ci.scenario import (
     ScenarioLoadError,
     load_scenario,
 )
+from uav_ci.runtime import (
+    preflight_environment,
+    prepare_run,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -58,6 +62,43 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help="path to the PX4-Autopilot checkout",
+    )
+
+    prepare_parser = subcommands.add_parser(
+        "prepare",
+        help=(
+            "prepare and verify a run without "
+            "launching PX4"
+        ),
+    )
+    prepare_parser.add_argument(
+        "scenario",
+        type=Path,
+        help="path to the scenario YAML",
+    )
+    prepare_parser.add_argument(
+        "--environment",
+        type=Path,
+        required=True,
+        help="path to the environment profile YAML",
+    )
+    prepare_parser.add_argument(
+        "--px4-repository",
+        type=Path,
+        required=True,
+        help="path to the PX4-Autopilot checkout",
+    )
+    prepare_parser.add_argument(
+        "--runs-root",
+        type=Path,
+        default=Path("artifacts/runs"),
+        help="directory where run artifacts are stored",
+    )
+    prepare_parser.add_argument(
+        "--repetition-index",
+        type=int,
+        default=1,
+        help="one-based scenario repetition index",
     )
 
     return parser
@@ -134,6 +175,55 @@ def preflight_environment_command(
     print("PREFLIGHT FAILED")
     return 1
 
+def prepare_run_command(
+    scenario_path: Path,
+    environment_path: Path,
+    px4_repository: Path,
+    runs_root: Path,
+    repetition_index: int,
+) -> int:
+    # prepare a run and report whether it may launch
+
+    try:
+        prepared = prepare_run(
+            scenario_path,
+            environment_path,
+            px4_repository=px4_repository,
+            runs_root=runs_root,
+            repetition_index=repetition_index,
+        )
+    except (
+        ScenarioLoadError,
+        EnvironmentLoadError,
+        OSError,
+        ValueError,
+    ) as exc:
+        print(
+            f"PREPARATION ERROR: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(
+        f"PREPARED: {prepared.manifest.scenario_id}"
+    )
+    print(
+        f"run_directory: "
+        f"{prepared.run_directory.root}"
+    )
+    print(
+        f"manifest: "
+        f"{prepared.run_directory.manifest_path}"
+    )
+    print(
+        f"preflight: "
+        f"{prepared.run_directory.preflight_path}"
+    )
+    print(
+        f"ready: {str(prepared.ready).lower()}"
+    )
+
+    return 0 if prepared.ready else 1
 
 def main(
     argv: Sequence[str] | None = None,
@@ -152,6 +242,15 @@ def main(
         return preflight_environment_command(
             arguments.environment,
             arguments.px4_repository,
+        )
+
+    if arguments.command == "prepare":
+        return prepare_run_command(
+            arguments.scenario,
+            arguments.environment,
+            arguments.px4_repository,
+            arguments.runs_root,
+            arguments.repetition_index,
         )
 
     parser.error(
