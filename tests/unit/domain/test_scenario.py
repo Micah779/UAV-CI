@@ -35,6 +35,11 @@ def baseline_scenario_data() -> dict[str, object]:
             "repetitions": 1,
             "seed": 42,
         },
+        "mission": {
+            "file": "missions/baseline.plan",
+            "upload_timeout_s": 30,
+            "completion_timeout_s": 300,
+        },
         "stimulus": {
             "type": "none",
         },
@@ -55,6 +60,11 @@ def fault_scenario_data() -> dict[str, object]:
             "run_timeout_s": 600,
             "repetitions": 1,
             "seed": 42,
+        },
+        "mission": {
+            "file": "missions/gnss_loss.plan",
+            "upload_timeout_s": 30,
+            "completion_timeout_s": 300,
         },
         "stimulus": {
             "type": "gnss_loss",
@@ -163,3 +173,14 @@ def test_scenario_is_immutable() -> None:
 
     with pytest.raises(ValidationError):
         scenario.title = "Changed title"
+
+def test_mission_budget_cannot_exceed_run_timeout() -> None:
+    data = baseline_scenario_data()
+    data["mission"] = {
+        "file": "missions/baseline.plan",
+        "upload_timeout_s": 301,
+        "completion_timeout_s": 300,
+    }
+
+    with pytest.raises(ValidationError):
+        ScenarioSpec.model_validate(data)

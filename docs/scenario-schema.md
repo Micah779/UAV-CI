@@ -2,7 +2,7 @@
 
 UAV-CI scenarios are versioned, declarative test definitions
 
-This document describes the current Phase A subset. Mission, parameter, trigger, assertion-definition, and artifact fields will be added in later increments.
+This document describes the current Phase A subset. Trigger details, assertion definitions, and artifact policies will be added later.
 
 ## Schema version
 
@@ -29,7 +29,7 @@ enviornement:
     profile: px4-gz-x500-v1
 ```
 
-The profile will resolve to one pinned PX4, Gazebo, X500, and world configuration. Resolved values will be recorded in the artifact manifest.
+The profile will resolve to one pinned PX4, Gazebo, X500, and world configuration.
 
 ## Execution
 
@@ -43,6 +43,40 @@ execution:
 ```
 
 Timeouts and repitions must be positive. A seed must be zero or greater.
+
+## Mission
+
+The mission is a repository-relative QGroundControl plan:
+```yaml
+mission:
+    file: missions/baseline.plan
+    upload_timout_s: 30
+    completion_timeout_s: 300
+```
+
+Mission paths must remain under `missions/` and use the `.plan` extension.
+
+The combined upload and completion budget cannot exceed the run timeout.
+
+## Parameters
+
+Parameter overrides are typed and ordered:
+
+```yaml
+parameters:
+    overrides:
+        - name: COM_LOW_BAT_ACT
+          value: 3
+        - name: SIM_BAT_DRAIN
+          value: 240.0
+    restore: snapshot
+```
+
+Parameter names must be uppercase, contain only letters, numbers and underscores, and be no longer than 16 characters.
+
+Parameter values are integers or floating-point numbers. Booleans and strings are rejected.
+
+Override names must be unique. Snapshot restoration is mandatory.
 
 ## Baseline stimulus
 
