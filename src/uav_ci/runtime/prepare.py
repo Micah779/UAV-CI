@@ -56,6 +56,7 @@ class InputSnapshots:
     scenario_path: Path
     environment_path: Path
     patch_paths: tuple[Path, ...]
+    mission_path: Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +107,10 @@ def snapshot_run_inputs(
         run_directory.environment_snapshot_path,
         environment_contents,
     )
+    publish_bytes_exclusively(
+        run_directory.mission_snapshot_path,
+        loaded_scenario.mission_contents,
+    )
 
     snapshot_patch_paths: list[Path] = []
 
@@ -145,6 +150,9 @@ def snapshot_run_inputs(
         ),
         environment_path=(
             run_directory.environment_snapshot_path
+        ),
+        mission_path=(
+            run_directory.mission_snapshot_path
         ),
         patch_paths=tuple(snapshot_patch_paths),
     )

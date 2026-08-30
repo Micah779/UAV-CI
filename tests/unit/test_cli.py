@@ -47,6 +47,7 @@ def test_validate_command_accepts_valid_scenario(
     assert "assertions: 1" in captured.out
     assert "hash: " in captured.out
     assert captured.err == ""
+    assert "mission_hash: " in captured.out
 
 
 def test_validate_command_rejects_invalid_scenario(

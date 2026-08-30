@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -23,11 +24,12 @@ STARTED_AT = datetime(
 )
 SCENARIO_HASH = "a" * 64
 ENVIRONMENT_HASH = "b" * 64
+MISSION_HASH = "c" * 64
 
 
 def valid_manifest_data() -> dict[str, object]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": RUN_ID,
         "scenario_id": "baseline_mission",
         "scenario_hash": SCENARIO_HASH,
@@ -45,6 +47,8 @@ def valid_manifest_data() -> dict[str, object]:
         "environment_profile": "px4-gz-x500-v1",
         "environment_hash": ENVIRONMENT_HASH,
         "requires_activation": False,
+        "mission_file": "missions/baseline.plan",
+        "mission_hash": MISSION_HASH,
     }
 
 
@@ -60,6 +64,10 @@ def test_valid_manifest_is_parsed() -> None:
     assert manifest.repetition_count == 1
     assert manifest.harness.uav_ci_version == "0.1.0"
     assert manifest.environment_hash == ENVIRONMENT_HASH
+    assert manifest.mission_file == (
+        Path("missions/baseline.plan")
+    )
+    assert manifest.mission_hash == MISSION_HASH
 
 
 def test_invalid_repetition_bounds_are_rejected() -> None:
@@ -165,3 +173,19 @@ def test_manifest_is_immutable() -> None:
 
     with pytest.raises(ValidationError):
         manifest.repetition_index = 2
+
+def test_invalid_mission_hash_is_rejected() -> None:
+    invalid_hashes = (
+        "abc123",
+        "C" * 64,
+        "g" * 64,
+        "c" * 63,
+        "c" * 65,
+    )
+
+    for mission_hash in invalid_hashes:
+        data = valid_manifest_data()
+        data["mission_hash"] = mission_hash
+
+        with pytest.raises(ValidationError):
+            RunManifest.model_validate(data)

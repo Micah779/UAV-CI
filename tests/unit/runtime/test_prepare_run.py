@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from uuid import UUID
-
+from hashlib import sha256
 import pytest
 
 from uav_ci.domain.environment import (
@@ -54,6 +54,11 @@ TEST_HARNESS = HarnessProvenance(
     uav_ci_version="0.1.0",
     python_version="3.14.7",
     platform="test-platform",
+)
+MISSION_PATH = (
+    PROJECT_ROOT
+    / "missions"
+    / "baseline.plan"
 )
 
 
@@ -135,6 +140,15 @@ def test_ready_run_is_fully_materialized(
     )
 
     assert prepared.ready is True
+    assert (
+        prepared.snapshots.mission_path.read_bytes()
+        == MISSION_PATH.read_bytes()
+    )
+    assert prepared.manifest.mission_hash == (
+        sha256(
+            MISSION_PATH.read_bytes()
+        ).hexdigest()
+    )
 
     restored_manifest = RunManifest.model_validate_json(
         prepared.run_directory.manifest_path.read_text(

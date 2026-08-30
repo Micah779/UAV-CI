@@ -66,6 +66,8 @@ def build_run_manifest(
         seed=scenario.execution.seed,
         started_at=started_at,
         harness=harness,
+        mission_file=scenario.mission.file,
+        mission_hash=loaded_scenario.mission_hash,
     )
 
 def write_run_manifest(

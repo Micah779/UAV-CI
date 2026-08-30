@@ -3,6 +3,7 @@
 from datetime import timedelta
 from typing import Literal, Self
 from uuid import UUID
+from pathlib import Path
 
 from pydantic import (
     AwareDatetime,
@@ -42,7 +43,7 @@ class RunManifest(BaseModel):
         str_strip_whitespace=True,
     )
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     run_id: UUID
 
     scenario_id: str = Field(
@@ -50,6 +51,9 @@ class RunManifest(BaseModel):
         pattern=r"^[a-z][a-z0-9_]*$",
     )
     scenario_hash: Sha256Digest
+
+    mission_file: Path
+    mission_hash: Sha256Digest
 
     environment_profile: EnvironmentProfileId
     environment_hash: Sha256Digest

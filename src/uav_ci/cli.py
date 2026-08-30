@@ -241,6 +241,8 @@ def validate_scenario_command(path: Path) -> int:
     print(
         f"assertions: {len(loaded.scenario.assertions)}"
     )
+    print(f"mission: {loaded.mission_path}")
+    print(f"mission_hash: {loaded.mission_hash}")
 
     return 0
 

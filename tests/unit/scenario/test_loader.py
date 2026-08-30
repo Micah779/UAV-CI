@@ -1,7 +1,8 @@
 # tests for safe scenario loading and deterministic hashing
 
 from pathlib import Path
-
+import json
+from hashlib import sha256
 import pytest
 
 from uav_ci.scenario import (
@@ -35,6 +36,40 @@ assertions:
     description: The vehicle reaches a landed state.
 """.strip()
 
+def write_valid_mission(
+    tmp_path: Path,
+    *,
+    altitude: float = 20.0,
+) -> Path:
+    mission_directory = tmp_path / "missions"
+    mission_directory.mkdir(exist_ok=True)
+
+    path = mission_directory / "baseline.plan"
+    contents = {
+        "fileType": "Plan",
+        "groundStation": "QGroundControl",
+        "mission": {
+            "items": [
+                {
+                    "command": 22,
+                    "params": [
+                        0,
+                        0,
+                        0,
+                        None,
+                        47.3977,
+                        8.5456,
+                        altitude,
+                    ],
+                },
+            ],
+        },
+    }
+    path.write_text(
+        json.dumps(contents),
+        encoding="utf-8",
+    )
+    return path
 
 def write_scenario(
     tmp_path: Path,
@@ -49,6 +84,8 @@ def write_scenario(
 def test_valid_yaml_is_loaded_and_hashed(
     tmp_path: Path,
 ) -> None:
+    write_valid_mission(tmp_path)
+
     path = write_scenario(
         tmp_path,
         "baseline.yaml",
@@ -63,11 +100,26 @@ def test_valid_yaml_is_loaded_and_hashed(
     assert set(loaded.scenario_hash) <= set(
         "0123456789abcdef"
     )
+    mission_path = (
+        tmp_path / "missions/baseline.plan"
+    )
+
+    assert loaded.mission_path == (
+        mission_path.resolve()
+    )
+    assert loaded.mission_hash == sha256(
+        mission_path.read_bytes()
+    ).hexdigest()
+    assert loaded.mission_contents == (
+        mission_path.read_bytes()
+    )
 
 
 def test_formatting_and_comments_do_not_change_hash(
     tmp_path: Path,
 ) -> None:
+    write_valid_mission(tmp_path)
+
     first_path = write_scenario(
         tmp_path,
         "first.yaml",
@@ -91,6 +143,8 @@ def test_formatting_and_comments_do_not_change_hash(
 def test_semantic_change_changes_hash(
     tmp_path: Path,
 ) -> None:
+    write_valid_mission(tmp_path)
+
     original_path = write_scenario(
         tmp_path,
         "original.yaml",
@@ -207,3 +261,74 @@ def test_missing_file_is_rejected(
         match="could not read scenario",
     ):
         load_scenario(path)
+
+def test_missing_referenced_mission_is_rejected(
+    tmp_path: Path,
+) -> None:
+    path = write_scenario(
+        tmp_path,
+        "baseline.yaml",
+        VALID_SCENARIO_YAML,
+    )
+
+    with pytest.raises(
+        ScenarioLoadError,
+        match="could not read referenced mission",
+    ):
+        load_scenario(path)
+
+
+def test_invalid_mission_json_is_rejected(
+    tmp_path: Path,
+) -> None:
+    mission_directory = tmp_path / "missions"
+    mission_directory.mkdir()
+    (
+        mission_directory / "baseline.plan"
+    ).write_text(
+        "{invalid",
+        encoding="utf-8",
+    )
+
+    path = write_scenario(
+        tmp_path,
+        "baseline.yaml",
+        VALID_SCENARIO_YAML,
+    )
+
+    with pytest.raises(
+        ScenarioLoadError,
+        match="invalid mission JSON",
+    ):
+        load_scenario(path)
+
+
+def test_mission_change_has_separate_identity(
+    tmp_path: Path,
+) -> None:
+    path = write_scenario(
+        tmp_path,
+        "baseline.yaml",
+        VALID_SCENARIO_YAML,
+    )
+
+    write_valid_mission(
+        tmp_path,
+        altitude=20.0,
+    )
+    first = load_scenario(path)
+
+    write_valid_mission(
+        tmp_path,
+        altitude=25.0,
+    )
+    second = load_scenario(path)
+
+    assert (
+        first.scenario_hash
+        == second.scenario_hash
+    )
+    assert (
+        first.mission_hash
+        != second.mission_hash
+    )

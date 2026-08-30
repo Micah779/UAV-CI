@@ -85,6 +85,12 @@ def test_run_directory_structure_is_created(
     assert not (
         run_directory.vehicle_preconditions_path.exists()
     )
+    assert run_directory.mission_snapshot_path == (
+        run_directory.inputs_dir / "mission.plan"
+    )
+    assert not (
+        run_directory.mission_snapshot_path.exists()
+    )
 
     assert not run_directory.scenario_snapshot_path.exists()
     assert not run_directory.environment_snapshot_path.exists()

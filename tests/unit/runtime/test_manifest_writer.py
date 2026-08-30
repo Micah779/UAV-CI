@@ -107,6 +107,16 @@ def test_manifest_is_built_from_loaded_scenario(
     assert manifest.environment_hash == (
         loaded_environment.profile_hash
     )
+    loaded_scenario = load_scenario(
+        BASELINE_SCENARIO
+    )
+
+    assert manifest.mission_file == (
+        Path("missions/baseline.plan")
+    )
+    assert manifest.mission_hash == (
+        loaded_scenario.mission_hash
+    )
 
 
 def test_real_harness_provenance_is_detected() -> None:
