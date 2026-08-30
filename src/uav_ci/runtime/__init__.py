@@ -5,6 +5,9 @@ from uav_ci.runtime.manifest import (
     detect_harness_provenance,
     write_run_manifest,
 )
+from uav_ci.runtime.result_writer import (
+    write_run_result,
+)
 from uav_ci.runtime.run_directory import (
     RunDirectory,
     create_run_directory,
@@ -94,4 +97,5 @@ __all__ = [
     "FlightCheckResult",
     "FlightRejected",
     "run_flight_check",
+    "write_run_result",
 ]
