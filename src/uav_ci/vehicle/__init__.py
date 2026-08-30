@@ -19,6 +19,14 @@ from uav_ci.vehicle.preconditions import (
     wait_for_vehicle_preconditions,
 )
 
+from uav_ci.vehicle.mission import (
+    MissionExecutionError,
+    MissionExecutionResult,
+    MissionExecutionTimeout,
+    MissionTelemetryStreamEnded,
+    execute_mission,
+)
+
 
 __all__ = [
     "ConnectedVehicle",
@@ -34,4 +42,9 @@ __all__ = [
     "VehiclePreconditionStreamEnded",
     "VehiclePreconditionTimeout",
     "wait_for_vehicle_preconditions",
+    "MissionExecutionError",
+    "MissionExecutionResult",
+    "MissionExecutionTimeout",
+    "MissionTelemetryStreamEnded",
+    "execute_mission",
 ]

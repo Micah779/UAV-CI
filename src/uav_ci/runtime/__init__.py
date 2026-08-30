@@ -50,6 +50,11 @@ from uav_ci.runtime.health import (
     HealthCheckResult,
     run_health_check,
 )
+from uav_ci.runtime.flight import (
+    FlightCheckResult,
+    FlightRejected,
+    run_flight_check,
+)
 
 __all__ = [
     "RunDirectory",
@@ -86,4 +91,7 @@ __all__ = [
     "run_launch_check",
     "HealthCheckResult",
     "run_health_check",
+    "FlightCheckResult",
+    "FlightRejected",
+    "run_flight_check",
 ]

@@ -28,8 +28,12 @@ from uav_ci.vehicle import (
     VehicleConnectionError,
     connect_vehicle,
     VehiclePreconditionError,
+    MissionExecutionError,
 )
-
+from uav_ci.runtime import (
+    FlightRejected,
+    run_flight_check,
+)
 
 def build_parser() -> argparse.ArgumentParser:
     # build the UAV-CI command line parser
@@ -211,6 +215,32 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=60.0,
         help="maximum time to prove preconditions",
+    )
+    flight_parser = subcommands.add_parser(
+        "flight-check",
+        help=(
+            "execute the snapshotted baseline "
+            "mission in the supported SITL profile"
+        ),
+    )
+    flight_parser.add_argument(
+        "scenario",
+        type=Path,
+    )
+    flight_parser.add_argument(
+        "--environment",
+        type=Path,
+        required=True,
+    )
+    flight_parser.add_argument(
+        "--px4-repository",
+        type=Path,
+        required=True,
+    )
+    flight_parser.add_argument(
+        "--runs-root",
+        type=Path,
+        default=Path("artifacts/runs"),
     )
 
     return parser
@@ -577,6 +607,98 @@ def health_check_command(
 
     return 0 if preconditions.passed else 1
 
+def flight_check_command(
+    scenario_path: Path,
+    environment_path: Path,
+    px4_repository: Path,
+    runs_root: Path,
+) -> int:
+    # execute the first bounded SITL flight
+
+    try:
+        prepared = prepare_run(
+            scenario_path,
+            environment_path,
+            px4_repository=px4_repository,
+            runs_root=runs_root,
+        )
+    except (
+        ScenarioLoadError,
+        EnvironmentLoadError,
+        OSError,
+        ValueError,
+    ) as exc:
+        print(
+            f"PREPARATION ERROR: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not prepared.ready:
+        print(
+            "FLIGHT REJECTED: environment "
+            "preflight failed",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        result = asyncio.run(
+            run_flight_check(
+                prepared,
+                px4_repository=px4_repository,
+            )
+        )
+    except (
+        FlightRejected,
+        LaunchRejected,
+        ProcessExitedBeforeReady,
+        ProcessReadinessTimeout,
+        VehicleConnectionError,
+        VehiclePreconditionError,
+        MissionExecutionError,
+        OSError,
+        ValueError,
+    ) as exc:
+        print(
+            f"FLIGHT CHECK FAILED: {exc}",
+            file=sys.stderr,
+        )
+        print(
+            f"run_directory: "
+            f"{prepared.run_directory.root}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("FLIGHT CHECK PASSED")
+    print(
+        f"run_directory: "
+        f"{prepared.run_directory.root}"
+    )
+    print(
+        "mission_items: "
+        f"{result.mission.mission_item_count}"
+    )
+    print(
+        "mission_progress: "
+        f"{result.mission.final_current}/"
+        f"{result.mission.final_total}"
+    )
+    print(
+        "landed: "
+        f"{result.mission.landed_observed}"
+    )
+    print(
+        "disarmed: "
+        f"{result.mission.disarmed_observed}"
+    )
+    print(
+        "elapsed_seconds: "
+        f"{result.mission.elapsed_s:.3f}"
+    )
+
+    return 0
 
 def main(
     argv: Sequence[str] | None = None,
@@ -628,6 +750,13 @@ def main(
             arguments.px4_repository,
             arguments.runs_root,
             arguments.health_timeout_seconds,
+        )
+    if arguments.command == "flight-check":
+        return flight_check_command(
+            arguments.scenario,
+            arguments.environment,
+            arguments.px4_repository,
+            arguments.runs_root,
         )
 
     parser.error(

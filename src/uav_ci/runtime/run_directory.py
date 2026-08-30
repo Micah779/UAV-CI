@@ -34,6 +34,7 @@ class RunDirectory:
     preflight_path: Path
     vehicle_preconditions_path: Path
     mission_snapshot_path: Path
+    mission_execution_path: Path
 
 def create_run_directory(
     runs_root: str | Path,
@@ -118,5 +119,8 @@ def create_run_directory(
         ),
         mission_snapshot_path=(
             inputs_dir / "mission.plan"
+        ),
+        mission_execution_path=(
+            evidence_dir / "mission_execution.json"
         ),
     )
