@@ -32,6 +32,7 @@ from uav_ci.vehicle import (
 )
 from uav_ci.runtime import (
     FlightRejected,
+    ULogCaptureError,
     run_flight_check,
 )
 
@@ -657,6 +658,7 @@ def flight_check_command(
         VehicleConnectionError,
         VehiclePreconditionError,
         MissionExecutionError,
+        ULogCaptureError,
         OSError,
         ValueError,
     ) as exc:
@@ -700,6 +702,16 @@ def flight_check_command(
     print(
         "elapsed_seconds: "
         f"{result.mission.elapsed_s:.3f}"
+    )
+    print(
+        f"ulog: {result.ulog.path}"
+    )
+    print(
+        f"ulog_sha256: {result.ulog.sha256}"
+    )
+    print(
+        "ulog_size_bytes: "
+        f"{result.ulog.size_bytes}"
     )
 
     return 0

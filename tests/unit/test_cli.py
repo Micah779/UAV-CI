@@ -487,3 +487,78 @@ def test_launch_check_rejects_failed_preflight(
     assert exit_code == 1
     assert captured.out == ""
     assert "LAUNCH REJECTED" in captured.err
+
+
+def test_flight_check_reports_captured_ulog(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    prepared = SimpleNamespace(
+        ready=True,
+        run_directory=SimpleNamespace(
+            root=tmp_path / "run",
+        ),
+    )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.prepare_run",
+        lambda *_args, **_kwargs: prepared,
+    )
+
+    async def fake_flight_check(
+        received_prepared,
+        *,
+        px4_repository,
+    ):
+        assert received_prepared is prepared
+
+        return SimpleNamespace(
+            mission=SimpleNamespace(
+                mission_item_count=4,
+                final_current=4,
+                final_total=4,
+                airborne_observed=True,
+                landed_observed=True,
+                disarmed_observed=True,
+                elapsed_s=120.0,
+            ),
+            ulog=SimpleNamespace(
+                path=(
+                    tmp_path
+                    / "run"
+                    / "logs"
+                    / "flight.ulg"
+                ),
+                sha256="a" * 64,
+                size_bytes=4096,
+            ),
+        )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.run_flight_check",
+        fake_flight_check,
+    )
+
+    exit_code = main(
+        [
+            "flight-check",
+            str(BASELINE_SCENARIO),
+            "--environment",
+            str(ENVIRONMENT_PROFILE),
+            "--px4-repository",
+            str(TEST_PX4_REPOSITORY),
+            "--runs-root",
+            str(tmp_path / "runs"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "FLIGHT CHECK PASSED" in captured.out
+    assert "airborne: True" in captured.out
+    assert "ulog: " in captured.out
+    assert f"ulog_sha256: {'a' * 64}" in captured.out
+    assert "ulog_size_bytes: 4096" in captured.out
+    assert captured.err == ""
