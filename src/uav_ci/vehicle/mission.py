@@ -39,6 +39,12 @@ class MissionRawClient(Protocol):
     ) -> None:
         ...
 
+    async def set_current_mission_item(
+        self,
+        index: int,
+    ) -> None:
+        ...
+
     async def start_mission(self) -> None:
         ...
 
@@ -97,6 +103,7 @@ class MissionExecutionResult:
     final_current: int
     final_total: int
     armed_observed: bool
+    airborne_observed: bool
     landed_observed: bool
     disarmed_observed: bool
     elapsed_s: float
@@ -152,6 +159,19 @@ async def _wait_for_armed_state(
     raise MissionTelemetryStreamEnded(
         "armed telemetry ended before observing "
         f"{expected}"
+    )
+
+
+async def _wait_for_airborne_state(
+    telemetry: MissionTelemetry,
+) -> bool:
+    async for state in telemetry.landed_state():
+        if state.name.lower() == "in_air":
+            return True
+
+    raise MissionTelemetryStreamEnded(
+        "landed-state telemetry ended before "
+        "observing in_air"
     )
 
 
@@ -276,7 +296,7 @@ async def execute_mission(
     )
     started = monotonic_clock()
 
-    async def import_and_upload():
+    async def import_and_upload() -> int:
         imported = (
             await system
             .mission_raw
@@ -318,6 +338,23 @@ async def execute_mission(
             f"mission import or upload failed: {exc}"
         ) from exc
 
+    # PX4 can retain the final mission index between
+    # simulator runs. Explicitly restart from item zero.
+    try:
+        await _bounded(
+            system
+            .mission_raw
+            .set_current_mission_item(0),
+            timeout_s=10,
+            operation_name="mission cursor reset",
+        )
+    except MissionExecutionError:
+        raise
+    except Exception as exc:
+        raise MissionExecutionError(
+            f"mission cursor reset failed: {exc}"
+        ) from exc
+
     arm_command_accepted = False
 
     try:
@@ -343,15 +380,27 @@ async def execute_mission(
             operation_name="mission start",
         )
 
+        # Mission completion cannot be accepted until
+        # the vehicle has actually left the ground.
+        airborne_observed = await _bounded(
+            _wait_for_airborne_state(
+                system.telemetry
+            ),
+            timeout_s=30,
+            operation_name="airborne-state proof",
+        )
+
         async def complete_and_land():
             progress = (
                 await _wait_for_mission_completion(
                     system.mission_raw
                 )
             )
+
             landed = await _wait_for_landed_state(
                 system.telemetry
             )
+
             await _wait_for_armed_state(
                 system.telemetry,
                 expected=False,
@@ -387,6 +436,7 @@ async def execute_mission(
         final_current=progress.current,
         final_total=progress.total,
         armed_observed=armed_observed,
+        airborne_observed=airborne_observed,
         landed_observed=landed,
         disarmed_observed=disarmed,
         elapsed_s=monotonic_clock() - started,

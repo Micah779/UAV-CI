@@ -34,6 +34,9 @@ class FakeTelemetry:
         yield FakeState("IN_AIR")
         yield FakeState("ON_GROUND")
 
+class GroundOnlyTelemetry(FakeTelemetry):
+    async def landed_state(self):
+        yield FakeState("ON_GROUND")
 
 class FakeMissionRaw:
     def __init__(
@@ -43,6 +46,7 @@ class FakeMissionRaw:
     ) -> None:
         self.start_error = start_error
         self.uploaded = None
+        self.current_index: int | None = None
 
     async def import_qgroundcontrol_mission(
         self,
@@ -56,6 +60,12 @@ class FakeMissionRaw:
 
     async def upload_mission(self, items):
         self.uploaded = items
+
+    async def set_current_mission_item(
+        self,
+        index: int,
+    ) -> None:
+        self.current_index = index
 
     async def start_mission(self):
         if self.start_error is not None:
@@ -133,6 +143,8 @@ def test_successful_mission_lands_and_disarms(
 
     assert action.arm_called is True
     assert mission_raw.uploaded is not None
+    assert mission_raw.current_index == 0
+    assert result.airborne_observed is True
     assert result.mission_item_count == 2
     assert result.final_current == 2
     assert result.final_total == 2
@@ -240,3 +252,36 @@ def test_geofence_is_rejected_before_arming(
         )
 
     assert action.arm_called is False
+
+def test_mission_must_prove_airborne(
+    tmp_path: Path,
+) -> None:
+    mission_path = tmp_path / "mission.plan"
+    mission_path.write_text(
+        "{}",
+        encoding="utf-8",
+    )
+
+    mission_raw = FakeMissionRaw()
+    action = FakeAction()
+
+    with pytest.raises(
+        MissionExecutionError,
+        match="in_air",
+    ):
+        asyncio.run(
+            execute_mission(
+                fake_vehicle(
+                    mission_raw,
+                    action,
+                    GroundOnlyTelemetry(),
+                ),
+                mission_path,
+                upload_timeout_s=1,
+                completion_timeout_s=1,
+            )
+        )
+
+    assert mission_raw.current_index == 0
+    assert action.arm_called is True
+    assert action.land_called is True

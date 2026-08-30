@@ -686,6 +686,10 @@ def flight_check_command(
         f"{result.mission.final_total}"
     )
     print(
+        "airborne: "
+        f"{result.mission.airborne_observed}"
+    )
+    print(
         "landed: "
         f"{result.mission.landed_observed}"
     )

@@ -27,7 +27,6 @@ from uav_ci.vehicle.mission import (
     execute_mission,
 )
 
-
 __all__ = [
     "ConnectedVehicle",
     "VehicleConnectionError",

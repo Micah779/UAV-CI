@@ -3,6 +3,7 @@ README.md
 pyproject.toml
 src/uav_ci/__init__.py
 src/uav_ci/cli.py
+src/uav_ci/clocks.py
 src/uav_ci.egg-info/PKG-INFO
 src/uav_ci.egg-info/SOURCES.txt
 src/uav_ci.egg-info/dependency_links.txt
@@ -21,6 +22,9 @@ src/uav_ci/environment/errors.py
 src/uav_ci/environment/loader.py
 src/uav_ci/runtime/__init__.py
 src/uav_ci/runtime/files.py
+src/uav_ci/runtime/flight.py
+src/uav_ci/runtime/health.py
+src/uav_ci/runtime/launch.py
 src/uav_ci/runtime/logging.py
 src/uav_ci/runtime/manifest.py
 src/uav_ci/runtime/preflight.py
@@ -30,3 +34,7 @@ src/uav_ci/runtime/run_directory.py
 src/uav_ci/scenario/__init__.py
 src/uav_ci/scenario/errors.py
 src/uav_ci/scenario/loader.py
+src/uav_ci/vehicle/__init__.py
+src/uav_ci/vehicle/connection.py
+src/uav_ci/vehicle/mission.py
+src/uav_ci/vehicle/preconditions.py
