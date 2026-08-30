@@ -58,6 +58,12 @@ from uav_ci.runtime.flight import (
     FlightRejected,
     run_flight_check,
 )
+from uav_ci.runtime.ulog import (
+    CapturedULog,
+    ULogCaptureError,
+    capture_px4_ulog,
+    extract_ulog_relative_path,
+)
 
 __all__ = [
     "RunDirectory",
@@ -98,4 +104,8 @@ __all__ = [
     "FlightRejected",
     "run_flight_check",
     "write_run_result",
+    "CapturedULog",
+    "ULogCaptureError",
+    "capture_px4_ulog",
+    "extract_ulog_relative_path",
 ]

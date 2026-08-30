@@ -67,6 +67,10 @@ def test_run_directory_structure_is_created(
         run_directory.logs_dir / "events.jsonl"
     )
     assert not run_directory.events_path.exists()
+    assert run_directory.ulog_path == (
+        run_directory.logs_dir / "flight.ulg"
+    )
+    assert not run_directory.ulog_path.exists()
     assert run_directory.input_patches_dir.is_dir()
     assert run_directory.scenario_snapshot_path == (
         run_directory.inputs_dir / "scenario.json"
