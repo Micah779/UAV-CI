@@ -12,6 +12,10 @@ from uav_ci.vehicle import (
     VehicleConnectionTimeout,
 )
 from types import SimpleNamespace
+from uav_ci.domain.enums import (
+    CheckOutcome,
+    ResultStatus,
+)
 
 
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -498,6 +502,11 @@ def test_flight_check_reports_captured_ulog(
         ready=True,
         run_directory=SimpleNamespace(
             root=tmp_path / "run",
+            result_path=tmp_path / "run/result.json",
+            land_detection_path=(
+                tmp_path
+                / "run/evidence/land_detection.json"
+            ),
         ),
     )
 
@@ -514,6 +523,19 @@ def test_flight_check_reports_captured_ulog(
         assert received_prepared is prepared
 
         return SimpleNamespace(
+            assurance_result=SimpleNamespace(
+                status=ResultStatus.PASS,
+                assertions=(
+                    SimpleNamespace(
+                        outcome=CheckOutcome.PASSED,
+                        assertion_id="vehicle_landed",
+                        message=(
+                            "The vehicle completed a "
+                            "landing transition."
+                        ),
+                    ),
+                ),
+            ),
             mission=SimpleNamespace(
                 mission_item_count=4,
                 final_current=4,
@@ -562,3 +584,6 @@ def test_flight_check_reports_captured_ulog(
     assert f"ulog_sha256: {'a' * 64}" in captured.out
     assert "ulog_size_bytes: 4096" in captured.out
     assert captured.err == ""
+    assert "FLIGHT CHECK PASSED" in captured.out
+    assert "result: " in captured.out
+    assert "[PASSED] vehicle_landed:" in captured.out

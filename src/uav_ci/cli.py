@@ -35,6 +35,11 @@ from uav_ci.runtime import (
     ULogCaptureError,
     run_flight_check,
 )
+from uav_ci.analysis import (
+    BaselineEvaluationError,
+    ULogAnalysisError,
+)
+from uav_ci.domain.enums import ResultStatus
 
 def build_parser() -> argparse.ArgumentParser:
     # build the UAV-CI command line parser
@@ -659,6 +664,8 @@ def flight_check_command(
         VehiclePreconditionError,
         MissionExecutionError,
         ULogCaptureError,
+        BaselineEvaluationError,
+        ULogAnalysisError,
         OSError,
         ValueError,
     ) as exc:
@@ -673,7 +680,15 @@ def flight_check_command(
         )
         return 1
 
-    print("FLIGHT CHECK PASSED")
+    status = result.assurance_result.status
+
+    if status is ResultStatus.PASS:
+        print("FLIGHT CHECK PASSED")
+    else:
+        print(
+            "FLIGHT CHECK "
+            f"{status.value.upper()}"
+        )
     print(
         f"run_directory: "
         f"{prepared.run_directory.root}"
@@ -713,8 +728,29 @@ def flight_check_command(
         "ulog_size_bytes: "
         f"{result.ulog.size_bytes}"
     )
+    print(
+        "land_detection: "
+        f"{prepared.run_directory.land_detection_path}"
+    )
+    print(
+        "result: "
+        f"{prepared.run_directory.result_path}"
+    )
 
-    return 0
+    for assertion in (
+        result.assurance_result.assertions
+    ):
+        print(
+            f"[{assertion.outcome.value.upper()}] "
+            f"{assertion.assertion_id}: "
+            f"{assertion.message}"
+        )
+
+    return (
+        0
+        if status is ResultStatus.PASS
+        else 1
+    )
 
 def main(
     argv: Sequence[str] | None = None,

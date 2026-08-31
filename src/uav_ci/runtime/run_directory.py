@@ -27,6 +27,7 @@ class RunDirectory:
     reports_dir: Path
     events_path: Path
     ulog_path: Path
+    land_detection_path: Path
     manifest_path: Path
     result_path: Path
     input_patches_dir: Path
@@ -114,6 +115,9 @@ def create_run_directory(
         ),
         events_path=logs_dir / "events.jsonl",
         ulog_path=logs_dir / "flight.ulg",
+        land_detection_path=(
+            evidence_dir / "land_detection.json"
+        ),
         manifest_path=root / "manifest.json",
         result_path=root / "result.json",
         vehicle_preconditions_path=(

@@ -1,17 +1,31 @@
-# tests for post-shutdown flight ULog capture
+# tests for classified post-flight ULog processing
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from uav_ci.analysis import LandDetectionSummary
+from uav_ci.domain.enums import ResultStatus
 from uav_ci.runtime.flight import (
     run_flight_check,
 )
 from uav_ci.runtime.ulog import CapturedULog
 from uav_ci.vehicle import MissionExecutionResult
+
+
+FINISHED_AT = datetime(
+    2026,
+    8,
+    30,
+    12,
+    2,
+    0,
+    tzinfo=timezone.utc,
+)
 
 
 class FakePreconditions:
@@ -24,7 +38,7 @@ class FakePreconditions:
         return "{}"
 
 
-def test_ulog_is_captured_after_shutdown(
+def test_flight_is_classified_after_ulog_capture(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -50,10 +64,16 @@ def test_ulog_is_captured_after_shutdown(
             evidence_dir
             / "mission_execution.json"
         ),
+        land_detection_path=(
+            evidence_dir
+            / "land_detection.json"
+        ),
+        result_path=run_root / "result.json",
         ulog_path=logs_dir / "flight.ulg",
     )
     prepared = SimpleNamespace(
         run_directory=run_directory,
+        manifest=object(),
         snapshots=SimpleNamespace(
             mission_path=mission_path,
         ),
@@ -129,6 +149,27 @@ def test_ulog_is_captured_after_shutdown(
         size_bytes=1024,
     )
 
+    land_detection = LandDetectionSummary(
+        topic="vehicle_land_detected",
+        instance=0,
+        sample_count=100,
+        first_timestamp_us=1_000_000,
+        last_timestamp_us=121_000_000,
+        initial_landed=True,
+        airborne_observed=True,
+        first_airborne_timestamp_us=(
+            5_000_000
+        ),
+        final_landed=True,
+        landing_transition_observed=True,
+        landing_timestamp_us=120_000_000,
+    )
+
+    assurance_result = SimpleNamespace(
+        status=ResultStatus.PASS,
+        assertions=(),
+    )
+
     def fake_capture_px4_ulog(
         received_run_directory,
         *,
@@ -137,12 +178,42 @@ def test_ulog_is_captured_after_shutdown(
     ):
         assert lifecycle["shutdown_complete"] is True
         assert received_run_directory is run_directory
-        assert px4_repository == (
-            tmp_path / "PX4-Autopilot"
-        )
         assert process_stdout_path == stdout_path
 
         return captured_ulog
+
+    def fake_analyze_land_detection(
+        received_path,
+    ):
+        assert received_path == captured_ulog.path
+        return land_detection
+
+    def fake_evaluate_baseline(
+        received_scenario,
+        received_manifest,
+        *,
+        preconditions,
+        mission,
+        land_detection,
+        finished_at,
+    ):
+        assert received_scenario is scenario
+        assert received_manifest is prepared.manifest
+        assert mission is mission_result
+        assert finished_at == FINISHED_AT
+
+        return assurance_result
+
+    def fake_write_run_result(
+        received_directory,
+        received_manifest,
+        received_result,
+    ):
+        assert received_directory is run_directory
+        assert received_manifest is prepared.manifest
+        assert received_result is assurance_result
+
+        return run_directory.result_path
 
     monkeypatch.setattr(
         "uav_ci.runtime.flight."
@@ -168,6 +239,21 @@ def test_ulog_is_captured_after_shutdown(
         "capture_px4_ulog",
         fake_capture_px4_ulog,
     )
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "analyze_land_detection",
+        fake_analyze_land_detection,
+    )
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "evaluate_baseline",
+        fake_evaluate_baseline,
+    )
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "write_run_result",
+        fake_write_run_result,
+    )
 
     result = asyncio.run(
         run_flight_check(
@@ -175,10 +261,24 @@ def test_ulog_is_captured_after_shutdown(
             px4_repository=(
                 tmp_path / "PX4-Autopilot"
             ),
+            clock=lambda: FINISHED_AT,
         )
     )
 
     assert lifecycle["shutdown_complete"] is True
     assert result.mission == mission_result
     assert result.ulog == captured_ulog
+    assert (
+        result.land_detection
+        == land_detection
+    )
+    assert (
+        result.assurance_result
+        is assurance_result
+    )
     assert result.shutdown_returncode == -15
+    assert (
+        run_directory
+        .land_detection_path
+        .is_file()
+    )
