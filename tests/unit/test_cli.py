@@ -651,3 +651,96 @@ def test_flight_check_reports_error_result(
     assert f"result: {result_path}" in (
         captured.err
     )
+
+def test_flight_preflight_failure_is_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+
+    result_path = run_root / "result.json"
+
+    prepared = SimpleNamespace(
+        ready=False,
+        manifest=object(),
+        run_directory=SimpleNamespace(
+            root=run_root,
+            result_path=result_path,
+        ),
+    )
+    published: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "uav_ci.cli.prepare_run",
+        lambda *_args, **_kwargs: prepared,
+    )
+
+    def fake_write_invalid_result(
+        received_directory,
+        received_manifest,
+        *,
+        assertion_id,
+        message,
+        finished_at,
+        evidence,
+    ):
+        published["directory"] = (
+            received_directory
+        )
+        published["manifest"] = (
+            received_manifest
+        )
+        published["assertion_id"] = (
+            assertion_id
+        )
+        published["message"] = message
+        published["evidence"] = evidence
+
+        result_path.write_text(
+            '{"status": "invalid"}\n',
+            encoding="utf-8",
+        )
+
+        return SimpleNamespace(
+            status=ResultStatus.INVALID,
+        )
+
+    monkeypatch.setattr(
+        "uav_ci.cli."
+        "write_invalid_precondition_result",
+        fake_write_invalid_result,
+    )
+
+    exit_code = main(
+        [
+            "flight-check",
+            str(BASELINE_SCENARIO),
+            "--environment",
+            str(ENVIRONMENT_PROFILE),
+            "--px4-repository",
+            str(TEST_PX4_REPOSITORY),
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "FLIGHT REJECTED:" in captured.err
+    assert "status: invalid" in captured.err
+    assert f"result: {result_path}" in (
+        captured.err
+    )
+    assert (
+        published["assertion_id"]
+        == "environment_ready"
+    )
+
+    evidence = published["evidence"]
+
+    assert len(evidence) == 1
+    assert evidence[0].artifact_path == Path(
+        "evidence/preflight.json"
+    )

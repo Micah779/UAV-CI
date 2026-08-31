@@ -11,6 +11,7 @@ import pytest
 from uav_ci.analysis import LandDetectionSummary
 from uav_ci.domain.enums import ResultStatus
 from uav_ci.runtime.flight import (
+    FlightRejected,
     run_flight_check,
 )
 from uav_ci.runtime.ulog import CapturedULog
@@ -382,4 +383,196 @@ def test_launch_error_is_published_before_reraise(
     assert (
         published["finished_at"]
         == FINISHED_AT
+    )
+
+def test_failed_vehicle_preconditions_are_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    evidence_dir = run_root / "evidence"
+    logs_dir = run_root / "logs"
+
+    evidence_dir.mkdir(parents=True)
+    logs_dir.mkdir()
+
+    run_directory = SimpleNamespace(
+        vehicle_preconditions_path=(
+            evidence_dir
+            / "vehicle_preconditions.json"
+        ),
+        result_path=run_root / "result.json",
+        ulog_path=logs_dir / "flight.ulg",
+    )
+    prepared = SimpleNamespace(
+        run_directory=run_directory,
+        manifest=object(),
+        snapshots=SimpleNamespace(),
+    )
+    scenario = SimpleNamespace(
+        execution=SimpleNamespace(
+            startup_timeout_s=120,
+        ),
+    )
+
+    stdout_path = logs_dir / "px4.stdout.log"
+    stdout_path.write_text(
+        "test stdout\n",
+        encoding="utf-8",
+    )
+
+    running = SimpleNamespace(
+        vehicle=object(),
+        process=SimpleNamespace(
+            stdout_path=stdout_path,
+        ),
+        shutdown_returncode=None,
+    )
+    lifecycle = {
+        "shutdown_complete": False,
+    }
+
+    class FailedPreconditions:
+        passed = False
+        observed_at = FINISHED_AT
+
+        def model_dump_json(
+            self,
+            **_kwargs,
+        ) -> str:
+            return (
+                '{"armable": false, '
+                '"armed": false}'
+            )
+
+    failed_preconditions = (
+        FailedPreconditions()
+    )
+
+    @asynccontextmanager
+    async def fake_managed_environment(
+        *_args,
+        **_kwargs,
+    ):
+        try:
+            yield running
+        finally:
+            running.shutdown_returncode = -15
+            lifecycle["shutdown_complete"] = True
+
+    async def fake_preconditions(
+        *_args,
+        **_kwargs,
+    ):
+        return failed_preconditions
+
+    def fake_capture_px4_ulog(
+        *_args,
+        **_kwargs,
+    ):
+        assert lifecycle["shutdown_complete"] is True
+
+        return CapturedULog(
+            path=run_directory.ulog_path,
+            source_relative_path=Path(
+                "log/test.ulg"
+            ),
+            sha256="a" * 64,
+            size_bytes=1024,
+        )
+
+    published: dict[str, object] = {}
+
+    def fake_write_invalid_result(
+        received_directory,
+        received_manifest,
+        *,
+        assertion_id,
+        message,
+        finished_at,
+        evidence,
+    ):
+        published["directory"] = (
+            received_directory
+        )
+        published["manifest"] = (
+            received_manifest
+        )
+        published["assertion_id"] = (
+            assertion_id
+        )
+        published["message"] = message
+        published["finished_at"] = (
+            finished_at
+        )
+        published["evidence"] = evidence
+
+        return SimpleNamespace(
+            status=ResultStatus.INVALID,
+        )
+
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "_load_snapshotted_scenario",
+        lambda _prepared: scenario,
+    )
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "managed_environment",
+        fake_managed_environment,
+    )
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "wait_for_vehicle_preconditions",
+        fake_preconditions,
+    )
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "capture_px4_ulog",
+        fake_capture_px4_ulog,
+    )
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "write_invalid_precondition_result",
+        fake_write_invalid_result,
+    )
+
+    with pytest.raises(
+        FlightRejected,
+        match="vehicle preconditions",
+    ):
+        asyncio.run(
+            run_flight_check(
+                prepared,
+                px4_repository=(
+                    tmp_path / "PX4-Autopilot"
+                ),
+                clock=lambda: FINISHED_AT,
+            )
+        )
+
+    assert lifecycle["shutdown_complete"] is True
+    assert (
+        run_directory
+        .vehicle_preconditions_path
+        .is_file()
+    )
+    assert (
+        published["directory"]
+        is run_directory
+    )
+    assert (
+        published["assertion_id"]
+        == "vehicle_ready"
+    )
+    assert (
+        published["finished_at"]
+        == FINISHED_AT
+    )
+
+    evidence = published["evidence"]
+
+    assert len(evidence) == 1
+    assert evidence[0].artifact_path == Path(
+        "evidence/vehicle_preconditions.json"
     )

@@ -5,6 +5,8 @@ from collections.abc import Sequence
 from pathlib import Path
 import sys
 import asyncio
+from uav_ci.clocks import utc_now
+from uav_ci.domain.evidence import EvidenceRef
 
 from uav_ci.environment import (
     EnvironmentLoadError,
@@ -34,12 +36,17 @@ from uav_ci.runtime import (
     FlightRejected,
     ULogCaptureError,
     run_flight_check,
+    write_invalid_precondition_result,
 )
 from uav_ci.analysis import (
     BaselineEvaluationError,
     ULogAnalysisError,
 )
-from uav_ci.domain.enums import ResultStatus
+from uav_ci.domain.enums import (
+    ClockDomain,
+    EvidenceSource,
+    ResultStatus,
+)
 
 def build_parser() -> argparse.ArgumentParser:
     # build the UAV-CI command line parser
@@ -641,11 +648,75 @@ def flight_check_command(
         return 1
 
     if not prepared.ready:
+        finished_at = utc_now()
+
+        evidence = EvidenceRef(
+            source=EvidenceSource.HARNESS,
+            clock_domain=ClockDomain.UTC,
+            timestamp_us=int(
+                finished_at.timestamp()
+                * 1_000_000
+            ),
+            signal=(
+                "environment.preflight.passed"
+            ),
+            artifact_path=Path(
+                "evidence/preflight.json"
+            ),
+            description=(
+                "Environment preflight recorded "
+                "one or more failed checks."
+            ),
+        )
+
+        try:
+            invalid_result = (
+                write_invalid_precondition_result(
+                    prepared.run_directory,
+                    prepared.manifest,
+                    assertion_id=(
+                        "environment_ready"
+                    ),
+                    message=(
+                        "Environment preflight "
+                        "did not pass."
+                    ),
+                    finished_at=finished_at,
+                    evidence=(evidence,),
+                )
+            )
+        except (
+            OSError,
+            ValueError,
+        ) as publication_error:
+            print(
+                "INVALID RESULT PUBLICATION "
+                f"FAILED: {publication_error}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "status: "
+                f"{invalid_result.status.value}",
+                file=sys.stderr,
+            )
+            print(
+                "result: "
+                f"{prepared.run_directory.result_path}",
+                file=sys.stderr,
+            )
+
         print(
             "FLIGHT REJECTED: environment "
             "preflight failed",
             file=sys.stderr,
         )
+        print(
+            "run_directory: "
+            f"{prepared.run_directory.root}",
+            file=sys.stderr,
+        )
+
         return 1
 
     try:

@@ -38,7 +38,14 @@ from uav_ci.vehicle import (
     execute_mission,
     wait_for_vehicle_preconditions,
 )
-
+from uav_ci.domain.enums import (
+    ClockDomain,
+    EvidenceSource,
+)
+from uav_ci.domain.evidence import EvidenceRef
+from uav_ci.runtime.invalid_result import (
+    write_invalid_precondition_result,
+)
 
 class FlightRejected(RuntimeError):
     # required preconditions did not authorize flight
@@ -89,6 +96,71 @@ def _write_harness_error_safely(
             f"{publication_error}"
         )
 
+def _write_vehicle_invalid_safely(
+    prepared: PreparedRun,
+    error: Exception,
+    preconditions: (
+        VehiclePreconditionResult | None
+    ),
+    *,
+    clock: Callable[[], datetime],
+) -> None:
+    # publish failed or unproven vehicle readiness
+
+    try:
+        finished_at = clock()
+        evidence: tuple[EvidenceRef, ...] = ()
+
+        if preconditions is not None:
+            evidence = (
+                EvidenceRef(
+                    source=(
+                        EvidenceSource.TELEMETRY
+                    ),
+                    clock_domain=ClockDomain.UTC,
+                    timestamp_us=int(
+                        preconditions
+                        .observed_at
+                        .timestamp()
+                        * 1_000_000
+                    ),
+                    signal=(
+                        "vehicle.preconditions.passed"
+                    ),
+                    artifact_path=Path(
+                        "evidence/"
+                        "vehicle_preconditions.json"
+                    ),
+                    description=(
+                        "MAVSDK telemetry recorded "
+                        "the preflight vehicle state."
+                    ),
+                ),
+            )
+
+        message = (
+            "Vehicle preconditions did not pass."
+            if preconditions is not None
+            else (
+                "Vehicle preconditions were not "
+                f"proven: {error}"
+            )
+        )
+
+        write_invalid_precondition_result(
+            prepared.run_directory,
+            prepared.manifest,
+            assertion_id="vehicle_ready",
+            message=message,
+            finished_at=finished_at,
+            evidence=evidence,
+        )
+
+    except Exception as publication_error:
+        error.add_note(
+            "invalid result publication also "
+            f"failed: {publication_error}"
+        )
 
 async def run_flight_check(
     prepared: PreparedRun,
@@ -208,15 +280,20 @@ async def run_flight_check(
                 )
 
     if flight_error is not None:
-        # Preconditions are not harness errors. They
-        # will receive INVALID results separately.
-        if not isinstance(
+        if isinstance(
             flight_error,
             (
                 FlightRejected,
                 VehiclePreconditionError,
             ),
         ):
+            _write_vehicle_invalid_safely(
+                prepared,
+                flight_error,
+                preconditions,
+                clock=clock,
+            )
+        else:
             _write_harness_error_safely(
                 prepared,
                 flight_error,
