@@ -138,6 +138,7 @@ This command controls only PX4 SITL and Gazebo. UAV-CI does not currently suppor
 ## Run artifacts
 Every run receives a unique directory beneath `artifacts/runs/`:
 
+```text
 artifacts/runs/<timestamp>_<scenario-id>_<run-id>/
 ├── inputs/
 │   ├── scenario.json
@@ -157,6 +158,7 @@ artifacts/runs/<timestamp>_<scenario-id>_<run-id>/
 ├── reports/
 ├── manifest.json
 └── result.json
+```
 
 The important top-level files are:
 - `manifest.json`: run identity, environment, scenario, and input provenance.
@@ -165,7 +167,7 @@ The important top-level files are:
 Run directories are non-overwriting. A new execution always receives a new run identity.
 
 ## Repository structure
-
+```text
 src/uav_ci/
 ├── analysis/       # ULog analysis and assurance evaluation
 ├── domain/         # immutable models and classification rules
@@ -174,16 +176,8 @@ src/uav_ci/
 ├── scenario/       # scenario loading and hashing
 ├── vehicle/        # MAVSDK connection and mission execution
 └── cli.py          # command-line interface
+```
 
 Supporting design documentation lives under docs/, including architecture decisions, evidence semantics, the scenario schema, and the known environment profile.
-
-## Near term roadmap
-My next milestones are:
-1. Publish terminal results for unsuccessful harness runs.
-2. Define the fault-controller and activation-evidence interfaces.
-3. Automate the wind scenario.
-4. Automate GNSS-loss and data-link-loss scenarios.
-5. Automate battery escalation and unsafe-action denial.
-6. Add regression summaries across repeated runs.
 
 The activation-first rule applies to every fault implementation.

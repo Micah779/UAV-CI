@@ -64,6 +64,11 @@ from uav_ci.runtime.ulog import (
     capture_px4_ulog,
     extract_ulog_relative_path,
 )
+from uav_ci.runtime.error_result import (
+    build_harness_error_result,
+    describe_harness_error,
+    write_harness_error_result,
+)
 
 __all__ = [
     "RunDirectory",
@@ -108,4 +113,7 @@ __all__ = [
     "ULogCaptureError",
     "capture_px4_ulog",
     "extract_ulog_relative_path",
+    "build_harness_error_result",
+    "describe_harness_error",
+    "write_harness_error_result",
 ]
