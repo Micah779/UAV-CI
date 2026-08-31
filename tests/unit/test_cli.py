@@ -9,6 +9,7 @@ from uav_ci.runtime import (
 )
 from uav_ci.vehicle import (
     ConnectedVehicle,
+    MissionExecutionError,
     VehicleConnectionTimeout,
 )
 from types import SimpleNamespace
@@ -587,3 +588,66 @@ def test_flight_check_reports_captured_ulog(
     assert "FLIGHT CHECK PASSED" in captured.out
     assert "result: " in captured.out
     assert "[PASSED] vehicle_landed:" in captured.out
+
+def test_flight_check_reports_error_result(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+
+    result_path = run_root / "result.json"
+    result_path.write_text(
+        '{"status": "error"}\n',
+        encoding="utf-8",
+    )
+
+    prepared = SimpleNamespace(
+        ready=True,
+        run_directory=SimpleNamespace(
+            root=run_root,
+            result_path=result_path,
+        ),
+    )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.prepare_run",
+        lambda *_args, **_kwargs: prepared,
+    )
+
+    async def failed_flight_check(
+        *_args,
+        **_kwargs,
+    ):
+        raise MissionExecutionError(
+            "mission progress timed out"
+        )
+
+    monkeypatch.setattr(
+        "uav_ci.cli.run_flight_check",
+        failed_flight_check,
+    )
+
+    exit_code = main(
+        [
+            "flight-check",
+            str(BASELINE_SCENARIO),
+            "--environment",
+            str(ENVIRONMENT_PROFILE),
+            "--px4-repository",
+            str(TEST_PX4_REPOSITORY),
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "FLIGHT CHECK FAILED:" in captured.err
+    assert "mission progress timed out" in (
+        captured.err
+    )
+    assert f"result: {result_path}" in (
+        captured.err
+    )

@@ -678,6 +678,19 @@ def flight_check_command(
             f"{prepared.run_directory.root}",
             file=sys.stderr,
         )
+
+        if (
+            prepared
+            .run_directory
+            .result_path
+            .is_file()
+        ):
+            print(
+                "result: "
+                f"{prepared.run_directory.result_path}",
+                file=sys.stderr,
+            )
+
         return 1
 
     status = result.assurance_result.status

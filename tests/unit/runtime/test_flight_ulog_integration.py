@@ -282,3 +282,104 @@ def test_flight_is_classified_after_ulog_capture(
         .land_detection_path
         .is_file()
     )
+
+def test_launch_error_is_published_before_reraise(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_directory = SimpleNamespace(
+        result_path=tmp_path / "result.json",
+    )
+    prepared = SimpleNamespace(
+        run_directory=run_directory,
+        manifest=object(),
+        snapshots=SimpleNamespace(),
+    )
+    scenario = SimpleNamespace(
+        execution=SimpleNamespace(
+            startup_timeout_s=120,
+        ),
+    )
+
+    launch_error = RuntimeError(
+        "PX4 exited before readiness"
+    )
+    published: dict[str, object] = {}
+
+    @asynccontextmanager
+    async def failing_environment(
+        *_args,
+        **_kwargs,
+    ):
+        raise launch_error
+
+        # This unreachable yield makes the function
+        # an async context manager generator.
+        yield
+
+    def fake_write_harness_error_result(
+        received_directory,
+        received_manifest,
+        *,
+        error,
+        finished_at,
+    ):
+        published["directory"] = (
+            received_directory
+        )
+        published["manifest"] = (
+            received_manifest
+        )
+        published["error"] = error
+        published["finished_at"] = (
+            finished_at
+        )
+
+        return SimpleNamespace(
+            status=ResultStatus.ERROR,
+        )
+
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "_load_snapshotted_scenario",
+        lambda _prepared: scenario,
+    )
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "managed_environment",
+        failing_environment,
+    )
+    monkeypatch.setattr(
+        "uav_ci.runtime.flight."
+        "write_harness_error_result",
+        fake_write_harness_error_result,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="PX4 exited before readiness",
+    ) as exc_info:
+        asyncio.run(
+            run_flight_check(
+                prepared,
+                px4_repository=(
+                    tmp_path / "PX4-Autopilot"
+                ),
+                clock=lambda: FINISHED_AT,
+            )
+        )
+
+    assert exc_info.value is launch_error
+    assert (
+        published["directory"]
+        is run_directory
+    )
+    assert (
+        published["manifest"]
+        is prepared.manifest
+    )
+    assert published["error"] is launch_error
+    assert (
+        published["finished_at"]
+        == FINISHED_AT
+    )
