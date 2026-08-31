@@ -69,6 +69,10 @@ from uav_ci.runtime.error_result import (
     describe_harness_error,
     write_harness_error_result,
 )
+from uav_ci.runtime.invalid_result import (
+    build_invalid_precondition_result,
+    write_invalid_precondition_result,
+)
 
 __all__ = [
     "RunDirectory",
@@ -116,4 +120,6 @@ __all__ = [
     "build_harness_error_result",
     "describe_harness_error",
     "write_harness_error_result",
+    "build_invalid_precondition_result",
+    "write_invalid_precondition_result",
 ]
