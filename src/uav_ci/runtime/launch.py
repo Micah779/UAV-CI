@@ -34,6 +34,15 @@ from uav_ci.vehicle import (
     ConnectedVehicle,
     connect_vehicle,
 )
+from uav_ci.domain.scenario import (
+    ScenarioSpec,
+    WindStimulusSpec,
+)
+from uav_ci.faults import (
+    PreparedWindModel,
+    WindWorkspaceError,
+    prepare_wind_model_workspace,
+)
 
 
 PX4_STARTUP_MARKER = (
@@ -54,6 +63,7 @@ class RunningEnvironment:
     process: ManagedProcess
     readiness: ReadinessMatch
     vehicle: ConnectedVehicle
+    wind_model: PreparedWindModel | None
     shutdown_returncode: int | None = None
 
 
@@ -125,8 +135,108 @@ def _load_snapshotted_environment(
 
     return environment
 
+def _load_snapshotted_scenario(
+    prepared: PreparedRun,
+) -> ScenarioSpec:
+    # restore the exact scenario frozen for this run
+
+    contents = (
+        prepared.snapshots.scenario_path
+        .read_text(encoding="utf-8")
+    )
+
+    scenario = ScenarioSpec.model_validate_json(
+        contents
+    )
+
+    if (
+        scenario.scenario_id
+        != prepared.manifest.scenario_id
+    ):
+        raise ValueError(
+            "snapshotted scenario does not "
+            "match the run manifest"
+        )
+
+    return scenario
+
+def _prepare_wind_model_if_required(
+    prepared: PreparedRun,
+    *,
+    environment: EnvironmentProfile,
+    px4_repository: Path,
+) -> PreparedWindModel | None:
+    # prepare isolated Gazebo resources for wind only
+
+    scenario = _load_snapshotted_scenario(
+        prepared
+    )
+
+    if (
+        scenario.environment.profile
+        != environment.profile_id
+    ):
+        raise LaunchRejected(
+            "scenario and environment snapshots "
+            "do not reference the same profile"
+        )
+
+    if not isinstance(
+        scenario.stimulus,
+        WindStimulusSpec,
+    ):
+        return None
+
+    patch_specs = environment.patches
+    patch_paths = prepared.snapshots.patch_paths
+
+    if len(patch_specs) != len(patch_paths):
+        raise LaunchRejected(
+            "environment patch snapshots are "
+            "incomplete"
+        )
+
+    wind_patch_paths: list[Path] = []
+
+    for patch_spec, patch_path in zip(
+        patch_specs,
+        patch_paths,
+        strict=True,
+    ):
+        expected_name = (
+            f"{patch_spec.patch_id}.patch"
+        )
+
+        if patch_path.name != expected_name:
+            raise LaunchRejected(
+                "environment patch snapshot name "
+                "does not match its declaration"
+            )
+
+        if patch_spec.applies_to == "wind":
+            wind_patch_paths.append(patch_path)
+
+    if len(wind_patch_paths) != 1:
+        raise LaunchRejected(
+            "wind scenario requires exactly one "
+            "snapshotted wind patch"
+        )
+
+    try:
+        return prepare_wind_model_workspace(
+            prepared.run_directory,
+            px4_repository=px4_repository,
+            patch_path=wind_patch_paths[0],
+        )
+    except WindWorkspaceError as exc:
+        raise LaunchRejected(
+            f"wind model preparation failed: {exc}"
+        ) from exc
+
 def _px4_process_environment(
     px4_repository: Path,
+    *,
+    gazebo_models_root: Path | None = None,
 ) -> dict[str, str]:
     # select PX4's own Python environment
 
@@ -170,6 +280,38 @@ def _px4_process_environment(
 
     environment.pop("PYTHONHOME", None)
 
+    if gazebo_models_root is not None:
+        resolved_models_root = (
+            gazebo_models_root.resolve()
+        )
+
+        if not resolved_models_root.is_dir():
+            raise LaunchRejected(
+                "run-owned Gazebo models directory "
+                "does not exist"
+            )
+
+        variable = "GZ_SIM_RESOURCE_PATH"
+        existing_entries = [
+            entry
+            for entry in environment.get(
+                variable,
+                "",
+            ).split(os.pathsep)
+            if (
+                entry
+                and entry
+                != str(resolved_models_root)
+            )
+        ]
+
+        environment[variable] = os.pathsep.join(
+            (
+                str(resolved_models_root),
+                *existing_entries,
+            )
+        )
+
     return environment
 
 
@@ -201,9 +343,22 @@ async def managed_environment(
         px4_repository
     ).resolve()
 
+    wind_model = (
+        _prepare_wind_model_if_required(
+            prepared,
+            environment=environment,
+            px4_repository=resolved_repository,
+        )
+    )
+
     process_environment = (
         _px4_process_environment(
-            resolved_repository
+            resolved_repository,
+            gazebo_models_root=(
+                wind_model.models_root
+                if wind_model is not None
+                else None
+            ),
         )
     )
 
@@ -216,6 +371,32 @@ async def managed_environment(
 
     managed: ManagedProcess | None = None
     running: RunningEnvironment | None = None
+
+    if wind_model is not None:
+        _append_lifecycle_event(
+            prepared,
+            event="wind_model_prepared",
+            message=(
+                "A run-owned X500 model was "
+                "prepared for wind."
+            ),
+            clock=clock,
+            monotonic_clock=monotonic_clock,
+            attributes=(
+                LogAttribute(
+                    key="models_root",
+                    value=str(
+                        wind_model.models_root
+                    ),
+                ),
+                LogAttribute(
+                    key="patch_path",
+                    value=str(
+                        wind_model.patch_path
+                    ),
+                ),
+            ),
+        )
 
     _append_lifecycle_event(
         prepared,
@@ -322,6 +503,7 @@ async def managed_environment(
             process=managed,
             readiness=readiness,
             vehicle=vehicle,
+            wind_model=wind_model,
         )
 
         yield running

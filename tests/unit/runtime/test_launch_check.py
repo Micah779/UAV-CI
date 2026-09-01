@@ -26,6 +26,7 @@ from uav_ci.runtime import (
     run_launch_check,
 )
 from uav_ci.vehicle import ConnectedVehicle
+from uav_ci.scenario import load_scenario
 
 
 PROJECT_ROOT = Path(__file__).parents[3]
@@ -34,7 +35,12 @@ ENVIRONMENT_PATH = (
     / "environments"
     / "px4-gz-x500-v1.yaml"
 )
-
+BASELINE_SCENARIO_PATH = (
+    PROJECT_ROOT / "scenarios" / "baseline.yaml"
+)
+WIND_SCENARIO_PATH = (
+    PROJECT_ROOT / "scenarios" / "wind.yaml"
+)
 RUN_ID = UUID(
     "12345678-1234-5678-1234-567812345678"
 )
@@ -53,20 +59,35 @@ def create_prepared_run(
     tmp_path: Path,
     *,
     ready: bool = True,
+    scenario_path: Path = (
+        BASELINE_SCENARIO_PATH
+    ),
 ):
-    run_directory = create_run_directory(
-        tmp_path / "runs",
-        run_id=RUN_ID,
-        scenario_id="baseline_mission",
-        started_at=STARTED_AT,
+    loaded_scenario = load_scenario(
+        scenario_path
     )
-
     loaded_environment = (
         load_environment_profile(
             ENVIRONMENT_PATH
         )
     )
 
+    run_directory = create_run_directory(
+        tmp_path / "runs",
+        run_id=RUN_ID,
+        scenario_id=(
+            loaded_scenario.scenario.scenario_id
+        ),
+        started_at=STARTED_AT,
+    )
+
+    run_directory.scenario_snapshot_path.write_text(
+        loaded_scenario.scenario.model_dump_json(
+            indent=2
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     run_directory.environment_snapshot_path.write_text(
         loaded_environment.profile.model_dump_json(
             indent=2
@@ -75,16 +96,44 @@ def create_prepared_run(
         encoding="utf-8",
     )
 
+    snapshot_patch_paths: list[Path] = []
+
+    for patch_spec, source_path in zip(
+        loaded_environment.profile.patches,
+        loaded_environment.patch_paths,
+        strict=True,
+    ):
+        destination = (
+            run_directory.input_patches_dir
+            / f"{patch_spec.patch_id}.patch"
+        )
+        destination.write_bytes(
+            source_path.read_bytes()
+        )
+        snapshot_patch_paths.append(
+            destination
+        )
+
     return SimpleNamespace(
         ready=ready,
         run_directory=run_directory,
         snapshots=SimpleNamespace(
+            scenario_path=(
+                run_directory
+                .scenario_snapshot_path
+            ),
             environment_path=(
                 run_directory
                 .environment_snapshot_path
             ),
+            patch_paths=tuple(
+                snapshot_patch_paths
+            ),
         ),
         manifest=SimpleNamespace(
+            scenario_id=(
+                loaded_scenario.scenario.scenario_id
+            ),
             environment_profile=(
                 loaded_environment
                 .profile
@@ -209,6 +258,10 @@ def test_launch_check_composes_full_lifecycle(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv(
+        "GZ_SIM_RESOURCE_PATH",
+        raising=False,
+    )
     prepared = create_prepared_run(tmp_path)
     calls, managed = install_successful_runtime(
         monkeypatch
@@ -288,6 +341,11 @@ def test_launch_check_composes_full_lifecycle(
             expected_px4_environment / "bin"
         )
     )
+    assert (
+        "GZ_SIM_RESOURCE_PATH"
+        not in process_environment
+    )
+    assert running.wind_model is None
 
 
 def test_failed_preflight_prevents_launch(
@@ -366,5 +424,129 @@ def test_operation_failure_still_stops_process(
         "process_ready",
         "vehicle_connected",
         "environment_session_failed",
+        "process_stopped",
+    ]
+def test_wind_launch_uses_run_owned_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepared = create_prepared_run(
+        tmp_path,
+        scenario_path=WIND_SCENARIO_PATH,
+    )
+    calls, _managed = install_successful_runtime(
+        monkeypatch
+    )
+    wall_clock, monotonic_clock = (
+        deterministic_clocks()
+    )
+
+    models_root = (
+        prepared.run_directory.workspace_dir
+        / "models"
+    )
+    model_directory = (
+        models_root / "x500_base"
+    )
+    model_directory.mkdir(parents=True)
+
+    wind_patch_path = (
+        prepared.snapshots.patch_paths[0]
+    )
+
+    prepared_wind_model = SimpleNamespace(
+        models_root=models_root,
+        model_directory=model_directory,
+        model_sdf_path=(
+            model_directory / "model.sdf"
+        ),
+        model_config_path=(
+            model_directory / "model.config"
+        ),
+        patch_path=wind_patch_path,
+    )
+
+    preparation_calls: dict[str, object] = {}
+
+    def fake_prepare_wind_model(
+        run_directory,
+        *,
+        px4_repository,
+        patch_path,
+    ):
+        preparation_calls["run_directory"] = (
+            run_directory
+        )
+        preparation_calls["px4_repository"] = (
+            px4_repository
+        )
+        preparation_calls["patch_path"] = (
+            patch_path
+        )
+        return prepared_wind_model
+
+    monkeypatch.setattr(
+        "uav_ci.runtime.launch."
+        "prepare_wind_model_workspace",
+        fake_prepare_wind_model,
+    )
+    monkeypatch.setenv(
+        "GZ_SIM_RESOURCE_PATH",
+        "/existing/gazebo/models",
+    )
+
+    repository = (
+        tmp_path / "PX4-Autopilot"
+    ).resolve()
+
+    async def exercise():
+        running = None
+
+        async with managed_environment(
+            prepared,
+            px4_repository=repository,
+            clock=wall_clock,
+            monotonic_clock=monotonic_clock,
+        ) as session:
+            running = session
+
+        return running
+
+    running = asyncio.run(exercise())
+
+    assert (
+        preparation_calls["run_directory"]
+        is prepared.run_directory
+    )
+    assert (
+        preparation_calls["px4_repository"]
+        == repository
+    )
+    assert (
+        preparation_calls["patch_path"]
+        == wind_patch_path
+    )
+
+    resource_paths = (
+        calls["environment"][
+            "GZ_SIM_RESOURCE_PATH"
+        ].split(os.pathsep)
+    )
+
+    assert resource_paths == [
+        str(models_root.resolve()),
+        "/existing/gazebo/models",
+    ]
+    assert (
+        running.wind_model
+        is prepared_wind_model
+    )
+
+    assert event_names(prepared) == [
+        "wind_model_prepared",
+        "process_launch_requested",
+        "process_started",
+        "process_ready",
+        "vehicle_connected",
         "process_stopped",
     ]

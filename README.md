@@ -169,6 +169,8 @@ The important top-level files are:
 
 Run directories are non-overwriting. A new execution always receives a new run identity.
 
+For wind scenarios, UAV-CI creates a patched X500 model under `workspace/models/x500_base/` and places that run-owned model first in Gazebo's resource search path. The shared PX4 checkout remains unchanged.
+
 ## Repository structure
 ```text
 src/uav_ci/
