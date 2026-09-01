@@ -269,21 +269,24 @@ class NoStimulusSpec(BaseModel):
 
 
 class FaultStimulusSpec(BaseModel):
-    # identifies a supported fault and its activation checks
+    # shared requirements for every injected fault
 
     model_config = ConfigDict(
         extra="forbid",
         frozen=True,
     )
 
-    type: FaultType
-    
-    activation_check_ids: tuple[Identifier, ...] = Field(
+    activation_check_ids: tuple[
+        Identifier,
+        ...,
+    ] = Field(
         min_length=1,
     )
 
     @model_validator(mode="after")
-    def activation_check_ids_must_be_unique(self) -> Self:
+    def activation_check_ids_must_be_unique(
+        self,
+    ) -> Self:
         if len(self.activation_check_ids) != len(
             set(self.activation_check_ids)
         ):
@@ -293,8 +296,71 @@ class FaultStimulusSpec(BaseModel):
 
         return self
 
+
+class WindStimulusSpec(FaultStimulusSpec):
+    # controlled Gazebo world-frame wind stimulus
+
+    type: Literal["wind"]
+    method: Literal[
+        "gazebo_transport"
+    ] = "gazebo_transport"
+    trigger: Literal["airborne"] = "airborne"
+
+    speed_m_s: NumericValue = Field(
+        gt=0,
+    )
+    direction_from_world_x_deg: (
+        NumericValue
+    ) = Field(
+        ge=0,
+        lt=360,
+    )
+    minimum_proven_speed_m_s: (
+        NumericValue
+    ) = Field(
+        gt=0,
+    )
+    activation_timeout_s: int = Field(
+        default=5,
+        gt=0,
+        strict=True,
+    )
+
+    @model_validator(mode="after")
+    def proof_threshold_must_be_reachable(
+        self,
+    ) -> Self:
+        if (
+            self.minimum_proven_speed_m_s
+            > self.speed_m_s
+        ):
+            raise ValueError(
+                "minimum proven wind speed cannot "
+                "exceed commanded wind speed"
+            )
+
+        return self
+
+
+class RuntimeFaultStimulusSpec(
+    FaultStimulusSpec,
+):
+    # fault types whose detailed schemas come later
+
+    type: Literal[
+        "gnss_loss",
+        "data_link_loss",
+        "simulated_battery_drain",
+        "unsafe_action_attempt",
+    ]
+
+
 StimulusSpec = Annotated[
-    NoStimulusSpec | FaultStimulusSpec,
+    (
+        NoStimulusSpec
+        | WindStimulusSpec
+        | RuntimeFaultStimulusSpec
+    ),
     Field(discriminator="type"),
 ]
 

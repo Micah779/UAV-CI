@@ -17,6 +17,7 @@ from uav_ci.domain.scenario import (
     FaultStimulusSpec,
     NoStimulusSpec,
     ScenarioSpec,
+    WindStimulusSpec,
 )
 
 def landed_assertion_data() -> dict[str, object]:
@@ -43,6 +44,68 @@ def gnss_activation_assertion_data() -> dict[str, object]:
         "description": (
             "GNSS loss is observed after fault injection."
         ),
+    }
+
+def wind_activation_assertion_data(
+) -> dict[str, object]:
+    return {
+        "assertion_id": (
+            "wind_reached_vehicle"
+        ),
+        "layer": "activation",
+        "source": "simulator",
+        "signal": "gazebo.wind.speed_m_s",
+        "operator": (
+            "greater_than_or_equal"
+        ),
+        "expected": 4.5,
+        "within_s": 5,
+        "description": (
+            "Gazebo wind at the vehicle reaches "
+            "the required speed."
+        ),
+    }
+
+
+def wind_scenario_data() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "scenario_id": "wind_tracking",
+        "title": "Wind Tracking",
+        "description": (
+            "Verify X500 behavior under "
+            "controlled Gazebo wind."
+        ),
+        "environment": {
+            "profile": "px4-gz-x500-v1",
+        },
+        "execution": {
+            "startup_timeout_s": 120,
+            "run_timeout_s": 600,
+            "repetitions": 1,
+            "seed": 42,
+        },
+        "mission": {
+            "file": "missions/baseline.plan",
+            "upload_timeout_s": 30,
+            "completion_timeout_s": 300,
+        },
+        "stimulus": {
+            "type": "wind",
+            "method": "gazebo_transport",
+            "trigger": "airborne",
+            "speed_m_s": 5.0,
+            "direction_from_world_x_deg": 90.0,
+            "minimum_proven_speed_m_s": 4.5,
+            "activation_timeout_s": 5,
+            "activation_check_ids": [
+                "wind_reached_vehicle",
+            ],
+        },
+        "assertions": [
+            wind_activation_assertion_data(),
+            landed_assertion_data(),
+        ],
     }
 
 def baseline_scenario_data() -> dict[str, object]:
@@ -304,4 +367,100 @@ def test_duplicate_activation_check_ids_are_rejected() -> None:
     }
 
     with pytest.raises(ValidationError):
+        ScenarioSpec.model_validate(data)
+
+def test_valid_wind_stimulus_is_typed() -> None:
+    scenario = ScenarioSpec.model_validate(
+        wind_scenario_data()
+    )
+
+    stimulus = scenario.stimulus
+
+    assert isinstance(
+        stimulus,
+        WindStimulusSpec,
+    )
+    assert isinstance(
+        stimulus,
+        FaultStimulusSpec,
+    )
+    assert stimulus.speed_m_s == 5.0
+    assert (
+        stimulus.direction_from_world_x_deg
+        == 90.0
+    )
+    assert (
+        stimulus.minimum_proven_speed_m_s
+        == 4.5
+    )
+    assert stimulus.trigger == "airborne"
+    assert scenario.requires_activation is True
+
+
+def test_wind_speed_must_be_positive() -> None:
+    data = wind_scenario_data()
+    stimulus = data["stimulus"]
+
+    assert isinstance(stimulus, dict)
+    stimulus["speed_m_s"] = 0.0
+
+    with pytest.raises(
+        ValidationError,
+        match="speed_m_s",
+    ):
+        ScenarioSpec.model_validate(data)
+
+
+def test_wind_direction_must_be_normalized(
+) -> None:
+    for direction in (
+        -1.0,
+        360.0,
+    ):
+        data = wind_scenario_data()
+        stimulus = data["stimulus"]
+
+        assert isinstance(stimulus, dict)
+        stimulus[
+            "direction_from_world_x_deg"
+        ] = direction
+
+        with pytest.raises(
+            ValidationError,
+            match=(
+                "direction_from_world_x_deg"
+            ),
+        ):
+            ScenarioSpec.model_validate(data)
+
+
+def test_wind_proof_threshold_must_be_reachable(
+) -> None:
+    data = wind_scenario_data()
+    stimulus = data["stimulus"]
+
+    assert isinstance(stimulus, dict)
+    stimulus[
+        "minimum_proven_speed_m_s"
+    ] = 5.1
+
+    with pytest.raises(
+        ValidationError,
+        match="cannot exceed",
+    ):
+        ScenarioSpec.model_validate(data)
+
+
+def test_non_wind_fault_rejects_wind_fields(
+) -> None:
+    data = fault_scenario_data()
+    stimulus = data["stimulus"]
+
+    assert isinstance(stimulus, dict)
+    stimulus["speed_m_s"] = 5.0
+
+    with pytest.raises(
+        ValidationError,
+        match="Extra inputs",
+    ):
         ScenarioSpec.model_validate(data)

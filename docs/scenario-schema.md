@@ -104,6 +104,32 @@ A fault scneario always requires activation evidence. A missing or empty activat
 
 The assertion definitions referenced by these IDs will be introduced in a later schema increment.
 
+### Wind stimulus
+
+The initial wind adapter uses controlled Gazebo world-frame wind.
+
+```yaml
+stimulus:
+  type: wind
+  method: gazebo_transport
+  trigger: airborne
+  speed_m_s: 5.0
+  direction_from_world_x_deg: 90.0
+  minimum_proven_speed_m_s: 4.5
+  activation_timeout_s: 5
+  activation_check_ids:
+    - wind_reached_vehicle
+```
+
+Direction is measured in the Gazebo world XY plane. Zero degrees points along positive X, and angles increase toward positive Y.
+
+`speed_m_s` is the requested simulator wind speed
+`minimum_proven_speed_m_s` is the independently observed speed required to prove activation. It must be positive and cannot exceed the commanded speed.
+
+A successful Gazebo command does not prove activation. The adapter must retain simulator evidence showing that the configured wind reached the vehicle model within `activation_timeout_s`.
+
+The initial release activates wind after the vehicle is proven airborne.
+
 ## Assertions
 
 Assertions describe the checks UAV-CI will evaluate
