@@ -42,6 +42,14 @@ EnvironmentProfileId = Literal[
     "px4-gz-x500-v1",
 ]
 
+FaultType = Literal[
+    "wind",
+    "gnss_loss",
+    "data_link_loss",
+    "simulated_battery_drain",
+    "unsafe_action_attempt",
+]
+
 NumericValue = StrictInt | StrictFloat
 ParameterValue = NumericValue
 
@@ -268,13 +276,8 @@ class FaultStimulusSpec(BaseModel):
         frozen=True,
     )
 
-    type: Literal[
-        "wind",
-        "gnss_loss",
-        "data_link_loss",
-        "simulated_battery_drain",
-        "unsafe_action_attempt",
-    ]
+    type: FaultType
+    
     activation_check_ids: tuple[Identifier, ...] = Field(
         min_length=1,
     )
