@@ -464,3 +464,61 @@ def test_non_wind_fault_rejects_wind_fields(
         match="Extra inputs",
     ):
         ScenarioSpec.model_validate(data)
+
+def test_wind_activation_threshold_must_match(
+) -> None:
+    data = wind_scenario_data()
+    assertions = data["assertions"]
+
+    assert isinstance(assertions, list)
+    activation = assertions[0]
+
+    assert isinstance(activation, dict)
+    activation["expected"] = 4.0
+
+    with pytest.raises(
+        ValidationError,
+        match="proof contract",
+    ):
+        ScenarioSpec.model_validate(data)
+
+
+def test_wind_activation_timeout_must_match(
+) -> None:
+    data = wind_scenario_data()
+    assertions = data["assertions"]
+
+    assert isinstance(assertions, list)
+    activation = assertions[0]
+
+    assert isinstance(activation, dict)
+    activation["within_s"] = 4
+
+    with pytest.raises(
+        ValidationError,
+        match="proof contract",
+    ):
+        ScenarioSpec.model_validate(data)
+
+
+def test_wind_activation_id_is_fixed() -> None:
+    data = wind_scenario_data()
+    stimulus = data["stimulus"]
+    assertions = data["assertions"]
+
+    assert isinstance(stimulus, dict)
+    assert isinstance(assertions, list)
+    assert isinstance(assertions[0], dict)
+
+    stimulus["activation_check_ids"] = [
+        "wind_command_succeeded",
+    ]
+    assertions[0]["assertion_id"] = (
+        "wind_command_succeeded"
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="wind_reached_vehicle",
+    ):
+        ScenarioSpec.model_validate(data)

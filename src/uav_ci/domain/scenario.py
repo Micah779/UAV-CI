@@ -495,6 +495,74 @@ class ScenarioSpec(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def validate_wind_activation_contract(
+        self,
+    ) -> Self:
+        if not isinstance(
+            self.stimulus,
+            WindStimulusSpec,
+        ):
+            return self
+
+        required_activation_ids = (
+            "wind_reached_vehicle",
+        )
+
+        if (
+            self.stimulus.activation_check_ids
+            != required_activation_ids
+        ):
+            raise ValueError(
+                "wind stimulus must use the "
+                "wind_reached_vehicle activation "
+                "check"
+            )
+
+        assertion_by_id = {
+            assertion.assertion_id: assertion
+            for assertion in self.assertions
+        }
+        activation = assertion_by_id[
+            "wind_reached_vehicle"
+        ]
+
+        supported_contract = all(
+            (
+                activation.layer
+                is AssertionLayer.ACTIVATION,
+                activation.source
+                is EvidenceSource.SIMULATOR,
+                activation.signal
+                == "gazebo.wind.speed_m_s",
+                activation.operator
+                is (
+                    ComparisonOperator
+                    .GREATER_THAN_OR_EQUAL
+                ),
+                activation.expected
+                == (
+                    self.stimulus
+                    .minimum_proven_speed_m_s
+                ),
+                activation.within_s
+                == (
+                    self.stimulus
+                    .activation_timeout_s
+                ),
+                activation.tolerance is None,
+            )
+        )
+
+        if not supported_contract:
+            raise ValueError(
+                "wind activation assertion does "
+                "not match the wind stimulus "
+                "proof contract"
+            )
+
+        return self
+        
     @property
     def requires_activation(self) -> bool:
         # return whether this scenario requires activation evidence
