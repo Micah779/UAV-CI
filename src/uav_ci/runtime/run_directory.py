@@ -25,6 +25,7 @@ class RunDirectory:
     logs_dir: Path
     evidence_dir: Path
     reports_dir: Path
+    workspace_dir: Path
     events_path: Path
     ulog_path: Path
     land_detection_path: Path
@@ -82,10 +83,12 @@ def create_run_directory(
     logs_dir = root / "logs"
     evidence_dir = root / "evidence"
     reports_dir = root / "reports"
+    workspace_dir = root / "workspace"
     input_patches_dir = inputs_dir / "patches"
 
     for directory in (
         inputs_dir,
+        workspace_dir,
         logs_dir,
         evidence_dir,
         reports_dir,
@@ -103,6 +106,7 @@ def create_run_directory(
         input_patches_dir=input_patches_dir,
         logs_dir=logs_dir,
         evidence_dir=evidence_dir,
+        workspace_dir=workspace_dir,
         reports_dir=reports_dir,
         scenario_snapshot_path=(
             inputs_dir / "scenario.json"

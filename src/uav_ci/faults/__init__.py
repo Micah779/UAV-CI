@@ -7,6 +7,11 @@ from uav_ci.faults.controller import (
     FaultLifecycle,
     FaultLifecycleError,
 )
+from uav_ci.faults.wind_workspace import (
+    PreparedWindModel,
+    WindWorkspaceError,
+    prepare_wind_model_workspace,
+)
 
 
 __all__ = [
@@ -15,4 +20,7 @@ __all__ = [
     "FaultController",
     "FaultLifecycle",
     "FaultLifecycleError",
+    "PreparedWindModel",
+    "WindWorkspaceError",
+    "prepare_wind_model_workspace",
 ]

@@ -145,6 +145,9 @@ artifacts/runs/<timestamp>_<scenario-id>_<run-id>/
 │   ├── environment.json
 │   ├── mission.plan
 │   └── patches/
+├── workspace/
+│   └── models/
+│       └── x500_base/
 ├── logs/
 │   ├── events.jsonl
 │   ├── flight.ulg
@@ -169,7 +172,9 @@ Run directories are non-overwriting. A new execution always receives a new run i
 ## Repository structure
 ```text
 src/uav_ci/
-├── analysis/       # ULog analysis and assurance evaluation
+├── analysis/       # ULog analysis and assurance 
+├── faults/         # activation-first fault adapters
+evaluation
 ├── domain/         # immutable models and classification rules
 ├── environment/    # environment-profile loading
 ├── runtime/        # run lifecycle and process orchestration
