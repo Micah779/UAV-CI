@@ -12,6 +12,12 @@ from uav_ci.faults.wind_workspace import (
     WindWorkspaceError,
     prepare_wind_model_workspace,
 )
+from uav_ci.faults.wind_command import (
+    GazeboWindCommandAdapter,
+    WindCommand,
+    WindCommandError,
+    WindCommandReceipt,
+)
 
 
 __all__ = [
@@ -23,4 +29,8 @@ __all__ = [
     "PreparedWindModel",
     "WindWorkspaceError",
     "prepare_wind_model_workspace",
+    "GazeboWindCommandAdapter",
+    "WindCommand",
+    "WindCommandError",
+    "WindCommandReceipt",
 ]
