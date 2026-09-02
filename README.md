@@ -171,6 +171,22 @@ Run directories are non-overwriting. A new execution always receives a new run i
 
 For wind scenarios, UAV-CI creates a patched X500 model under `workspace/models/x500_base/` and places that run-owned model first in Gazebo's resource search path. The shared PX4 checkout remains unchanged.
 
+## Gazebo state schema
+
+`gazebo_state.desc` is a generated protobuf descriptor set, including imports, for `gz/msgs/serialized_map.proto` from Gazebo Msgs 10.4.0.
+
+Source: https://github.com/gazebosim/gz-msgs/tree/gz-msgs10/proto/gz/msgs
+
+Copyright Open Source Robotics Foundation. The upstream Apache-2.0 license is retained in `gz-msgs-LICENSE`. Do not hand-edit the descriptor.
+
+The decoder targets full Gazebo Sim 8 state service responses for the pinned `default` world and `x500_0/base_link`. It is not a general topic-delta reader.
+
+Actual wind comes from the Wind entity's WorldLinearVelocity component. WorldLinearVelocitySeed is retained separately as the requested seed.
+Component type IDs use Gazebo's 64-bit FNV-1a registered-name hash.
+
+Simulation timestamps are Gazebo simulation nanoseconds, not UTC or PX4 boot time. A decoded observation does not establish freshness, global wind-system enablement, force application, or successful activation. Those require the
+later observation and activation stages.
+
 ## Repository structure
 ```text
 src/uav_ci/

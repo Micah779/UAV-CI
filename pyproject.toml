@@ -18,6 +18,7 @@ dependencies = [
     "pydantic>=2.13,<3",
     "PyYAML>=6.0.2,<7",
     "pyulog>=1.2.4,<2",
+    "protobuf>=7.36.0,<8",
 ]
 
 [project.scripts]
@@ -31,6 +32,9 @@ dev = [
 # look under src/ for packages
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"uav_ci.faults" = ["data/*.desc", "data/*.md", "data/*LICENSE*"]
 
 # tests live under tests/
 [tool.pytest.ini_options]

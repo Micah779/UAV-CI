@@ -1,0 +1,86 @@
+
+n
+gz/msgs/time.protogz.msgs",
+Time
+sec (Rsec
+nsec (RnsecB
+com.gz.msgsB
+TimeProtosbproto3
+à
+gz/msgs/header.protogz.msgsgz/msgs/time.proto"…
+Header#
+stamp (2.gz.msgs.TimeRstamp'
+data (2.gz.msgs.Header.MapRdata-
+Map
+key (	Rkey
+value (	RvalueB
+com.gz.msgsBHeaderProtosbproto3
+¤
+ gz/msgs/log_playback_stats.protogz.msgsgz/msgs/time.protogz/msgs/header.proto"˜
+LogPlaybackStatistics'
+header (2.gz.msgs.HeaderRheader,
+
+start_time (2.gz.msgs.TimeR	startTime(
+end_time (2.gz.msgs.TimeRendTimeB*
+com.gz.msgsBLogPlaybackStatisticsProtosbproto3
+ó
+gz/msgs/world_stats.protogz.msgs gz/msgs/log_playback_stats.protogz/msgs/time.protogz/msgs/header.proto"×
+WorldStatistics'
+header (2.gz.msgs.HeaderRheader(
+sim_time (2.gz.msgs.TimeRsimTime,
+
+pause_time (2.gz.msgs.TimeR	pauseTime*
+	real_time (2.gz.msgs.TimeRrealTime
+paused (Rpaused
+
+iterations (R
+iterations
+model_count (R
+modelCountL
+log_playback_stats (2.gz.msgs.LogPlaybackStatisticsRlogPlaybackStats(
+real_time_factor	 (RrealTimeFactor*
+	step_size
+ (2.gz.msgs.TimeRstepSize
+stepping (RsteppingB
+com.gz.msgsBWorldStatsProtosbproto3
+«
+gz/msgs/serialized.protogz.msgsgz/msgs/header.protogz/msgs/world_stats.proto"_
+SerializedComponent
+type (Rtype
+	component (R	component
+remove (Rremove"x
+SerializedEntity
+id (Rid<
+
+components (2.gz.msgs.SerializedComponentR
+components
+remove (Rremove"q
+SerializedState'
+header (2.gz.msgs.HeaderRheader5
+entities (2.gz.msgs.SerializedEntityRentities"p
+SerializedStep.
+stats (2.gz.msgs.WorldStatisticsRstats.
+state (2.gz.msgs.SerializedStateRstateB
+com.gz.msgsbproto3
+’
+gz/msgs/serialized_map.protogz.msgsgz/msgs/header.protogz/msgs/world_stats.protogz/msgs/serialized.proto"è
+SerializedEntityMap
+id (RidL
+
+components (2,.gz.msgs.SerializedEntityMap.ComponentsEntryR
+components
+remove (Rremove[
+ComponentsEntry
+key (Rkey2
+value (2.gz.msgs.SerializedComponentRvalue:8"£
+SerializedStateMap'
+header (2.gz.msgs.HeaderRheaderE
+entities (2).gz.msgs.SerializedStateMap.EntitiesEntryRentitiesB
+has_one_time_component_changes (RhasOneTimeComponentChangesY
+EntitiesEntry
+key (Rkey2
+value (2.gz.msgs.SerializedEntityMapRvalue:8"v
+SerializedStepMap.
+stats (2.gz.msgs.WorldStatisticsRstats1
+state (2.gz.msgs.SerializedStateMapRstateB
+com.gz.msgsbproto3

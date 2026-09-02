@@ -1,6 +1,8 @@
 mavsdk<4,>=3.17.2
 pydantic<3,>=2.13
 PyYAML<7,>=6.0.2
+pyulog<2,>=1.2.4
+protobuf<8,>=7.36.0
 
 [dev]
 pytest>=8
