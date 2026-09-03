@@ -7,11 +7,13 @@ import os
 import signal
 from time import monotonic_ns
 from typing import Protocol, Self
+from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict, StrictBool
 
 from uav_ci.domain.scenario import NumericValue, WindStimulusSpec
 
+from uav_ci.faults.gazebo_diagnostics import has_unrecognized_stderr
 
 WIND_TOPIC = "/world/default/wind"
 WIND_MESSAGE_TYPE = "gz.msgs.Wind"
@@ -200,28 +202,30 @@ class GazeboWindCommandAdapter:
         *,
         timeout_s: float = 5.0,
         runner: WindCommandRunner = run_gazebo_command,
+        clock: Callable[[], int] = monotonic_ns,
     ) -> None:
         _validate_timeout(timeout_s)
 
         self._timeout_s = timeout_s
         self._runner = runner
+        self._clock = clock
 
     async def send(
         self,
         request: WindCommand,
     ) -> WindCommandReceipt:
         argv = request.arguments()
-        started = monotonic_ns()
+        started = self._clock()
 
         output = await self._runner(
             argv,
             timeout_s=self._timeout_s,
         )
 
-        finished = monotonic_ns()
+        finished = self._clock()
 
         # Gazebo CLI diagnostics may accompany a zero exit status.
-        if output.returncode != 0 or output.stderr.strip():
+        if output.returncode != 0 or has_unrecognized_stderr(output.stderr):
             details = (
                 output.stderr.strip()
                 or output.stdout.strip()

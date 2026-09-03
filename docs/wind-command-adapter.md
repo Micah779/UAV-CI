@@ -27,7 +27,7 @@ Commands run without a shell and have a bounded publisher lifetime. Timeout or c
 
 The adapter inherits the current Gazebo transport environment and uses the loopback interface for the pinned local configuration. Concurrent unrelated sessions sharing the same world name and transport partition are outside the supported configuration.
 
-The initial adapter rejects nonzero exit status and any stderr diagnostic. Gazebo CLI errors are not always represented by exit status alone.
+The adapter rejects nonzero exit status and unrecognized stderr diagnostics. Only the narrowly matched informational gRPC fork diagnostic observed on the pinned installation is tolerated, and it remains in the command receipt. Gazebo CLI errors are not always represented by exit status alone. Accepting this diagnostic does not prove command delivery or wind activation.
 
 ## Receipt versus proof
 

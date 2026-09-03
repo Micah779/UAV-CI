@@ -22,11 +22,11 @@ Earlier records remain available if a later request fails.
 
 ## Diagnostics
 
-The exact informational gRPC fork diagnostic observed on the pinned installation is tolerated for read-only state requests and retained.
+The exact informational gRPC fork diagnostic observed on the pinned installation is tolerated for state requests and wind-command publication, and retained unchanged.
 
 All other nonempty stderr diagnostics reject the sample. Nonzero exit codes, invalid protobuf, missing required state, and late responses also reject the sample.
 
-This policy does not change wind-command publication.
+The observer and publisher share the same narrow diagnostic policy. Accepting a diagnostic does not prove command delivery or wind activation.
 
 ## Assurance boundary
 

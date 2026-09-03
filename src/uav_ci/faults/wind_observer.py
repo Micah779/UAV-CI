@@ -16,7 +16,6 @@ from dataclasses import asdict, dataclass
 import json
 import math
 from pathlib import Path
-import re
 from time import monotonic_ns
 
 from uav_ci.faults.wind_command import (
@@ -28,15 +27,7 @@ from uav_ci.faults.wind_state import (
     decode_wind_state,
 )
 from uav_ci.runtime.files import publish_text_exclusively
-
-
-GRPC_FORK_DIAGNOSTIC = re.compile(
-    r"I[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+\s+"
-    r"[0-9]+ ev_poll_posix\.cc:[0-9]+\] "
-    r"FD from fork parent still in poll list:\s*"
-    r"fd\([0-9]+, generation: [0-9]+\)"
-)
-
+from uav_ci.faults.gazebo_diagnostics import has_unrecognized_stderr
 
 class WindObservationError(RuntimeError):
     pass
@@ -192,16 +183,7 @@ async def observe_wind(
                     f"state command exited {output.returncode}"
                 )
 
-            diagnostics = [
-                line.strip()
-                for line in output.stderr.splitlines()
-                if line.strip()
-            ]
-
-            if any(
-                GRPC_FORK_DIAGNOSTIC.fullmatch(line) is None
-                for line in diagnostics
-            ):
+            if has_unrecognized_stderr(output.stderr):
                 raise WindObservationError(
                     "unrecognized state-command stderr"
                 )
