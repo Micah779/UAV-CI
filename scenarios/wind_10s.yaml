@@ -1,0 +1,62 @@
+# diagnostic variant: ten-second wind activation window.
+# the original five-second scenario remains unchanged.
+
+schema_version: 1
+scenario_id: wind_tracking_10s
+title: Wind Tracking - Ten-Second Diagnostic
+description: >
+  Execute the baseline X500 mission while applying controlled
+  Gazebo wind after takeoff. Allow ten seconds to collect
+  activation evidence. This is a separate diagnostic variant,
+  not verification of the original five-second requirement.
+
+environment:
+  profile: px4-gz-x500-v1
+
+execution:
+  startup_timeout_s: 120
+  run_timeout_s: 600
+  repetitions: 1
+  seed: 42
+
+mission:
+  file: missions/baseline.plan
+  upload_timeout_s: 30
+  completion_timeout_s: 300
+
+parameters:
+  overrides: []
+  restore: snapshot
+
+stimulus:
+  type: wind
+  method: gazebo_transport
+  trigger: airborne
+  speed_m_s: 5.0
+  direction_from_world_x_deg: 90.0
+  minimum_proven_speed_m_s: 4.5
+  activation_timeout_s: 10
+  activation_check_ids:
+    - wind_reached_vehicle
+
+assertions:
+  - assertion_id: wind_reached_vehicle
+    layer: activation
+    source: simulator
+    signal: gazebo.wind.speed_m_s
+    operator: greater_than_or_equal
+    expected: 4.5
+    within_s: 10
+    description: >
+      Gazebo wind at the vehicle reaches at least 4.5 meters
+      per second within ten seconds of activation.
+
+  - assertion_id: vehicle_landed
+    layer: outcome
+    source: ulog
+    signal: vehicle_land_detected.landed
+    operator: equal
+    expected: true
+    description: >
+      The vehicle completes a landing transition after the
+      wind-exposed mission.
