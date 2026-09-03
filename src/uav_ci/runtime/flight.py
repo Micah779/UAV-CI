@@ -1,5 +1,6 @@
 # bounded baseline SITL assurance orchestration
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -11,14 +12,37 @@ from uav_ci.analysis import (
     analyze_land_detection,
     evaluate_baseline,
 )
+from uav_ci.analysis.wind import (
+    evaluate_wind,
+    validate_wind_contract,
+)
 from uav_ci.clocks import utc_now
+from uav_ci.domain.enums import (
+    ClockDomain,
+    EvidenceSource,
+)
+from uav_ci.domain.evidence import EvidenceRef
 from uav_ci.domain.result import RunResult
-from uav_ci.domain.scenario import ScenarioSpec
+from uav_ci.domain.scenario import (
+    NoStimulusSpec,
+    ScenarioSpec,
+    WindStimulusSpec,
+)
+from uav_ci.faults.controller import (
+    FaultActivationNotProven,
+    FaultActivationResult,
+)
 from uav_ci.runtime.error_result import (
     write_harness_error_result,
 )
 from uav_ci.runtime.files import (
     publish_text_exclusively,
+)
+from uav_ci.runtime.invalid_activation import (
+    write_invalid_activation_result,
+)
+from uav_ci.runtime.invalid_result import (
+    write_invalid_precondition_result,
 )
 from uav_ci.runtime.launch import (
     managed_environment,
@@ -38,27 +62,38 @@ from uav_ci.vehicle import (
     execute_mission,
     wait_for_vehicle_preconditions,
 )
-from uav_ci.domain.enums import (
-    ClockDomain,
-    EvidenceSource,
-)
-from uav_ci.domain.evidence import EvidenceRef
-from uav_ci.runtime.invalid_result import (
-    write_invalid_precondition_result,
-)
+
 
 class FlightRejected(RuntimeError):
     # required preconditions did not authorize flight
     pass
 
 
+def _wind_controller_context(
+    stimulus,
+    run_root,
+):
+    # Delayed import avoids coupling foundational
+    # runtime imports back through the wind controller
+    # during package initialization.
+    from uav_ci.faults.wind_controller import (
+        managed_wind_controller,
+    )
+
+    return managed_wind_controller(
+        stimulus,
+        run_root,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class FlightCheckResult:
-    # completed and classified baseline flight
+    # completed and classified SITL flight
 
     prepared_run: PreparedRun
     preconditions: VehiclePreconditionResult
     mission: MissionExecutionResult
+    activation: FaultActivationResult | None
     ulog: CapturedULog
     land_detection: LandDetectionSummary
     assurance_result: RunResult
@@ -95,6 +130,7 @@ def _write_harness_error_safely(
             "result publication also failed: "
             f"{publication_error}"
         )
+
 
 def _write_vehicle_invalid_safely(
     prepared: PreparedRun,
@@ -162,6 +198,7 @@ def _write_vehicle_invalid_safely(
             f"failed: {publication_error}"
         )
 
+
 async def run_flight_check(
     prepared: PreparedRun,
     *,
@@ -171,12 +208,30 @@ async def run_flight_check(
         datetime,
     ] = utc_now,
 ) -> FlightCheckResult:
-    # execute and classify one baseline SITL run
+    # execute and classify one SITL run
 
     try:
         scenario = _load_snapshotted_scenario(
             prepared
         )
+
+        if isinstance(
+            scenario.stimulus,
+            WindStimulusSpec,
+        ):
+            validate_wind_contract(
+                scenario,
+                prepared.manifest,
+            )
+        elif not isinstance(
+            scenario.stimulus,
+            NoStimulusSpec,
+        ):
+            raise ValueError(
+                "flight-check currently supports "
+                "baseline and wind only"
+            )
+
     except Exception as error:
         _write_harness_error_safely(
             prepared,
@@ -189,7 +244,12 @@ async def run_flight_check(
     preconditions = None
     mission_result = None
     captured_ulog = None
+    activation_result = None
+    fault_lifecycle = None
     flight_error: Exception | None = None
+    cancellation: (
+        asyncio.CancelledError | None
+    ) = None
 
     try:
         async with managed_environment(
@@ -226,32 +286,79 @@ async def run_flight_check(
                     "vehicle preconditions did not pass"
                 )
 
-            mission_result = await execute_mission(
-                running.vehicle,
-                prepared.snapshots.mission_path,
-                upload_timeout_s=(
-                    scenario
-                    .mission
-                    .upload_timeout_s
-                ),
-                completion_timeout_s=(
-                    scenario
-                    .mission
-                    .completion_timeout_s
-                ),
-            )
-
-            publish_text_exclusively(
-                prepared
-                .run_directory
-                .mission_execution_path,
-                json.dumps(
-                    asdict(mission_result),
-                    indent=2,
-                    sort_keys=True,
+            async def fly(
+                on_airborne=None,
+            ):
+                return await execute_mission(
+                    running.vehicle,
+                    prepared.snapshots.mission_path,
+                    upload_timeout_s=(
+                        scenario
+                        .mission
+                        .upload_timeout_s
+                    ),
+                    completion_timeout_s=(
+                        scenario
+                        .mission
+                        .completion_timeout_s
+                    ),
+                    on_airborne=on_airborne,
                 )
-                + "\n",
-            )
+
+            def record_mission() -> None:
+                assert mission_result is not None
+
+                publish_text_exclusively(
+                    prepared
+                    .run_directory
+                    .mission_execution_path,
+                    json.dumps(
+                        asdict(mission_result),
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                )
+
+            if isinstance(
+                scenario.stimulus,
+                WindStimulusSpec,
+            ):
+                async with _wind_controller_context(
+                    scenario.stimulus,
+                    prepared.run_directory.root,
+                ) as fault:
+                    fault_lifecycle = fault
+
+                    async def activate_wind() -> None:
+                        nonlocal activation_result
+
+                        await fault.activate()
+                        activation_result = (
+                            await fault
+                            .prove_activation()
+                        )
+
+                    mission_result = await fly(
+                        activate_wind
+                    )
+                    record_mission()
+            else:
+                mission_result = await fly()
+                record_mission()
+
+    except asyncio.CancelledError as error:
+        cancellation = error
+        flight_error = RuntimeError(
+            "flight check cancelled"
+        )
+
+        for note in getattr(
+            error,
+            "__notes__",
+            (),
+        ):
+            flight_error.add_note(note)
 
     except Exception as error:
         # Preserve the original failure until PX4
@@ -279,8 +386,49 @@ async def run_flight_check(
                     f"{capture_error}"
                 )
 
+    if (
+        flight_error is None
+        and fault_lifecycle is not None
+    ):
+        try:
+            fault_lifecycle.require_activation_proven()
+        except FaultActivationNotProven as error:
+            flight_error = error
+
     if flight_error is not None:
-        if isinstance(
+        if (
+            isinstance(
+                flight_error,
+                FaultActivationNotProven,
+            )
+            and preconditions is not None
+            and activation_result is not None
+        ):
+            try:
+                write_invalid_activation_result(
+                    prepared.run_directory,
+                    prepared.manifest,
+                    assertion_id=(
+                        "wind_reached_vehicle"
+                    ),
+                    preconditions=preconditions,
+                    activation=activation_result,
+                    finished_at=clock(),
+                )
+            except Exception as publication_error:
+                publication_error.add_note(
+                    "activation was also "
+                    f"unproven: {flight_error}"
+                )
+                flight_error = publication_error
+
+                _write_harness_error_safely(
+                    prepared,
+                    flight_error,
+                    clock=clock,
+                )
+
+        elif isinstance(
             flight_error,
             (
                 FlightRejected,
@@ -299,6 +447,9 @@ async def run_flight_check(
                 flight_error,
                 clock=clock,
             )
+
+        if cancellation is not None:
+            raise cancellation
 
         raise flight_error
 
@@ -339,14 +490,25 @@ async def run_flight_check(
             + "\n",
         )
 
-        assurance_result = evaluate_baseline(
-            scenario,
-            prepared.manifest,
-            preconditions=preconditions,
-            mission=mission_result,
-            land_detection=land_detection,
-            finished_at=clock(),
-        )
+        if activation_result is None:
+            assurance_result = evaluate_baseline(
+                scenario,
+                prepared.manifest,
+                preconditions=preconditions,
+                mission=mission_result,
+                land_detection=land_detection,
+                finished_at=clock(),
+            )
+        else:
+            assurance_result = evaluate_wind(
+                scenario,
+                prepared.manifest,
+                preconditions=preconditions,
+                activation=activation_result,
+                mission=mission_result,
+                land_detection=land_detection,
+                finished_at=clock(),
+            )
 
         write_run_result(
             prepared.run_directory,
@@ -366,6 +528,7 @@ async def run_flight_check(
         prepared_run=prepared,
         preconditions=preconditions,
         mission=mission_result,
+        activation=activation_result,
         ulog=captured_ulog,
         land_detection=land_detection,
         assurance_result=assurance_result,

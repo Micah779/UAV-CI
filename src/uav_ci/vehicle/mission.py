@@ -174,6 +174,22 @@ async def _wait_for_airborne_state(
         "observing in_air"
     )
 
+async def _confirm_still_airborne(
+    telemetry: MissionTelemetry,
+) -> bool:
+    async for state in telemetry.landed_state():
+        if state.name.lower() == "in_air":
+            return True
+
+        raise MissionExecutionError(
+            "vehicle was no longer in_air after "
+            "the airborne callback"
+        )
+
+    raise MissionTelemetryStreamEnded(
+        "landed-state telemetry ended before "
+        "confirming in_air"
+    )
 
 async def _wait_for_landed_state(
     telemetry: MissionTelemetry,
@@ -248,6 +264,9 @@ async def execute_mission(
     *,
     upload_timeout_s: float,
     completion_timeout_s: float,
+    on_airborne: (
+        Callable[[], Awaitable[None]] | None
+    ) = None,
     recovery_timeout_s: float = 90.0,
     monotonic_clock: Callable[
         [],
@@ -269,6 +288,14 @@ async def execute_mission(
     if recovery_timeout_s <= 0:
         raise ValueError(
             "recovery timeout must be positive"
+        )
+
+    if (
+        on_airborne is not None
+        and not callable(on_airborne)
+    ):
+        raise TypeError(
+            "on_airborne must be callable"
         )
 
     from uav_ci.vehicle.connection import (
@@ -389,6 +416,20 @@ async def execute_mission(
             timeout_s=30,
             operation_name="airborne-state proof",
         )
+
+        if on_airborne is not None:
+            await on_airborne()
+
+            await _bounded(
+                _confirm_still_airborne(
+                    system.telemetry
+                ),
+                timeout_s=10,
+                operation_name=(
+                    "post-callback "
+                    "airborne-state proof"
+                ),
+            )
 
         async def complete_and_land():
             progress = (

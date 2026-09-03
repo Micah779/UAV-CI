@@ -1,52 +1,59 @@
 # command line interface for UAV-CI
 
 import argparse
+import asyncio
 from collections.abc import Sequence
 from pathlib import Path
 import sys
-import asyncio
-from uav_ci.clocks import utc_now
-from uav_ci.domain.evidence import EvidenceRef
 
-from uav_ci.environment import (
-    EnvironmentLoadError,
-    load_environment_profile,
-)
-from uav_ci.runtime import preflight_environment
-from uav_ci.scenario import (
-    ScenarioLoadError,
-    load_scenario,
-)
-from uav_ci.runtime import (
-    LaunchRejected,
-    ProcessExitedBeforeReady,
-    ProcessReadinessTimeout,
-    preflight_environment,
-    prepare_run,
-    run_launch_check,
-    run_health_check,
-)
-from uav_ci.vehicle import (
-    VehicleConnectionError,
-    connect_vehicle,
-    VehiclePreconditionError,
-    MissionExecutionError,
-)
-from uav_ci.runtime import (
-    FlightRejected,
-    ULogCaptureError,
-    run_flight_check,
-    write_invalid_precondition_result,
-)
 from uav_ci.analysis import (
     BaselineEvaluationError,
     ULogAnalysisError,
 )
+from uav_ci.analysis.wind import (
+    WindEvaluationError,
+)
+from uav_ci.clocks import utc_now
 from uav_ci.domain.enums import (
     ClockDomain,
     EvidenceSource,
     ResultStatus,
 )
+from uav_ci.domain.evidence import EvidenceRef
+from uav_ci.environment import (
+    EnvironmentLoadError,
+    load_environment_profile,
+)
+from uav_ci.faults.controller import (
+    FaultActivationNotProven,
+)
+from uav_ci.faults.wind_command import (
+    WindCommandError,
+)
+from uav_ci.runtime import (
+    FlightRejected,
+    LaunchRejected,
+    ProcessExitedBeforeReady,
+    ProcessReadinessTimeout,
+    ULogCaptureError,
+    preflight_environment,
+    prepare_run,
+    run_flight_check,
+    run_health_check,
+    run_launch_check,
+    write_invalid_precondition_result,
+)
+from uav_ci.scenario import (
+    ScenarioLoadError,
+    load_scenario,
+)
+from uav_ci.vehicle import (
+    MissionExecutionError,
+    VehicleConnectionError,
+    VehiclePreconditionError,
+    connect_vehicle,
+)
+
 
 def build_parser() -> argparse.ArgumentParser:
     # build the UAV-CI command line parser
@@ -193,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=30.0,
         help="maximum time for MAVSDK discovery",
     )
+
     health_parser = subcommands.add_parser(
         "health-check",
         help=(
@@ -229,11 +237,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=60.0,
         help="maximum time to prove preconditions",
     )
+
     flight_parser = subcommands.add_parser(
         "flight-check",
         help=(
-            "execute the snapshotted baseline "
-            "mission in the supported SITL profile"
+            "execute and classify a supported "
+            "SITL assurance scenario"
         ),
     )
     flight_parser.add_argument(
@@ -257,6 +266,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     return parser
+
 
 def validate_scenario_command(path: Path) -> int:
     # validate one scenario and print its identity
@@ -288,6 +298,7 @@ def validate_scenario_command(path: Path) -> int:
     print(f"mission_hash: {loaded.mission_hash}")
 
     return 0
+
 
 def preflight_environment_command(
     environment_path: Path,
@@ -331,6 +342,7 @@ def preflight_environment_command(
 
     print("PREFLIGHT FAILED")
     return 1
+
 
 def prepare_run_command(
     scenario_path: Path,
@@ -381,6 +393,7 @@ def prepare_run_command(
     )
 
     return 0 if prepared.ready else 1
+
 
 def connect_vehicle_command(
     environment_path: Path,
@@ -434,6 +447,7 @@ def connect_vehicle_command(
     )
 
     return 0
+
 
 def launch_check_command(
     scenario_path: Path,
@@ -529,6 +543,7 @@ def launch_check_command(
 
     return 0
 
+
 def health_check_command(
     scenario_path: Path,
     environment_path: Path,
@@ -620,13 +635,14 @@ def health_check_command(
 
     return 0 if preconditions.passed else 1
 
+
 def flight_check_command(
     scenario_path: Path,
     environment_path: Path,
     px4_repository: Path,
     runs_root: Path,
 ) -> int:
-    # execute the first bounded SITL flight
+    # execute and classify a supported SITL flight
 
     try:
         prepared = prepare_run(
@@ -734,14 +750,26 @@ def flight_check_command(
         VehicleConnectionError,
         VehiclePreconditionError,
         MissionExecutionError,
+        FaultActivationNotProven,
+        WindCommandError,
         ULogCaptureError,
         BaselineEvaluationError,
+        WindEvaluationError,
         ULogAnalysisError,
         OSError,
         ValueError,
     ) as exc:
+        label = (
+            "FLIGHT CHECK INVALID"
+            if isinstance(
+                exc,
+                FaultActivationNotProven,
+            )
+            else "FLIGHT CHECK FAILED"
+        )
+
         print(
-            f"FLIGHT CHECK FAILED: {exc}",
+            f"{label}: {exc}",
             file=sys.stderr,
         )
         print(
@@ -773,6 +801,7 @@ def flight_check_command(
             "FLIGHT CHECK "
             f"{status.value.upper()}"
         )
+
     print(
         f"run_directory: "
         f"{prepared.run_directory.root}"
@@ -790,6 +819,17 @@ def flight_check_command(
         "airborne: "
         f"{result.mission.airborne_observed}"
     )
+
+    if result.activation is not None:
+        print(
+            "activation_proven: "
+            f"{result.activation.activated}"
+        )
+        print(
+            "activation_evidence: "
+            f"{result.activation.evidence[0].artifact_path}"
+        )
+
     print(
         "landed: "
         f"{result.mission.landed_observed}"
@@ -836,6 +876,7 @@ def flight_check_command(
         else 1
     )
 
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -879,6 +920,7 @@ def main(
             arguments.startup_timeout_seconds,
             arguments.connection_timeout_seconds,
         )
+
     if arguments.command == "health-check":
         return health_check_command(
             arguments.scenario,
@@ -887,6 +929,7 @@ def main(
             arguments.runs_root,
             arguments.health_timeout_seconds,
         )
+
     if arguments.command == "flight-check":
         return flight_check_command(
             arguments.scenario,

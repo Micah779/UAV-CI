@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from uav_ci.domain.scenario import NoStimulusSpec
 
 from uav_ci.analysis import LandDetectionSummary
 from uav_ci.domain.enums import ResultStatus
@@ -81,6 +82,7 @@ def test_flight_is_classified_after_ulog_capture(
     )
 
     scenario = SimpleNamespace(
+        stimulus=NoStimulusSpec(),
         execution=SimpleNamespace(
             startup_timeout_s=120,
         ),
@@ -284,6 +286,7 @@ def test_flight_is_classified_after_ulog_capture(
         .is_file()
     )
 
+
 def test_launch_error_is_published_before_reraise(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -301,10 +304,12 @@ def test_launch_error_is_published_before_reraise(
             startup_timeout_s=120,
         ),
     )
+    scenario.stimulus = NoStimulusSpec()
 
     launch_error = RuntimeError(
         "PX4 exited before readiness"
     )
+
     published: dict[str, object] = {}
 
     @asynccontextmanager
@@ -385,6 +390,7 @@ def test_launch_error_is_published_before_reraise(
         == FINISHED_AT
     )
 
+
 def test_failed_vehicle_preconditions_are_invalid(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -414,6 +420,7 @@ def test_failed_vehicle_preconditions_are_invalid(
             startup_timeout_s=120,
         ),
     )
+    scenario.stimulus = NoStimulusSpec()
 
     stdout_path = logs_dir / "px4.stdout.log"
     stdout_path.write_text(

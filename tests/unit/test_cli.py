@@ -537,6 +537,7 @@ def test_flight_check_reports_captured_ulog(
                     ),
                 ),
             ),
+            activation=None,
             mission=SimpleNamespace(
                 mission_item_count=4,
                 final_current=4,

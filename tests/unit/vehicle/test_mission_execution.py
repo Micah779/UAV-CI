@@ -47,6 +47,7 @@ class FakeMissionRaw:
         self.start_error = start_error
         self.uploaded = None
         self.current_index: int | None = None
+        self.progress_started = False
 
     async def import_qgroundcontrol_mission(
         self,
@@ -72,6 +73,7 @@ class FakeMissionRaw:
             raise self.start_error
 
     async def mission_progress(self):
+        self.progress_started = True
         yield SimpleNamespace(
             current=1,
             total=2,
@@ -81,6 +83,20 @@ class FakeMissionRaw:
             total=2,
         )
 
+class LandedAfterCallbackTelemetry(
+    FakeTelemetry,
+):
+    def __init__(self) -> None:
+        super().__init__()
+        self.landed_calls = 0
+
+    async def landed_state(self):
+        self.landed_calls += 1
+
+        if self.landed_calls == 1:
+            yield FakeState("IN_AIR")
+        else:
+            yield FakeState("ON_GROUND")
 
 class FakeAction:
     def __init__(self) -> None:
@@ -262,6 +278,12 @@ def test_mission_must_prove_airborne(
         encoding="utf-8",
     )
 
+    async def forbidden_hook() -> None:
+        pytest.fail(
+            "airborne hook must not run "
+            "for a grounded vehicle"
+        )
+
     mission_raw = FakeMissionRaw()
     action = FakeAction()
 
@@ -279,9 +301,158 @@ def test_mission_must_prove_airborne(
                 mission_path,
                 upload_timeout_s=1,
                 completion_timeout_s=1,
+                on_airborne=forbidden_hook,
             )
         )
 
     assert mission_raw.current_index == 0
     assert action.arm_called is True
     assert action.land_called is True
+
+def test_airborne_hook_runs_before_completion_wait(
+    tmp_path: Path,
+) -> None:
+    mission_path = tmp_path / "mission.plan"
+    mission_path.write_text(
+        "{}",
+        encoding="utf-8",
+    )
+
+    mission_raw = FakeMissionRaw()
+    action = FakeAction()
+    calls = []
+
+    async def on_airborne() -> None:
+        assert action.arm_called is True
+        assert mission_raw.current_index == 0
+        assert (
+            mission_raw.progress_started
+            is False
+        )
+        calls.append("airborne")
+
+    asyncio.run(
+        execute_mission(
+            fake_vehicle(
+                mission_raw,
+                action,
+                FakeTelemetry(),
+            ),
+            mission_path,
+            upload_timeout_s=1,
+            completion_timeout_s=1,
+            on_airborne=on_airborne,
+        )
+    )
+
+    assert calls == ["airborne"]
+
+
+def test_airborne_hook_failure_attempts_recovery(
+    tmp_path: Path,
+) -> None:
+    mission_path = tmp_path / "mission.plan"
+    mission_path.write_text(
+        "{}",
+        encoding="utf-8",
+    )
+
+    mission_raw = FakeMissionRaw()
+    action = FakeAction()
+
+    async def fail() -> None:
+        raise RuntimeError(
+            "wind activation failed"
+        )
+
+    with pytest.raises(
+        MissionExecutionError,
+        match="wind activation failed",
+    ):
+        asyncio.run(
+            execute_mission(
+                fake_vehicle(
+                    mission_raw,
+                    action,
+                    FakeTelemetry(),
+                ),
+                mission_path,
+                upload_timeout_s=1,
+                completion_timeout_s=1,
+                on_airborne=fail,
+            )
+        )
+
+    assert mission_raw.progress_started is False
+    assert action.land_called is True
+    assert action.disarm_called is True
+
+
+def test_vehicle_must_remain_airborne_after_hook(
+    tmp_path: Path,
+) -> None:
+    mission_path = tmp_path / "mission.plan"
+    mission_path.write_text(
+        "{}",
+        encoding="utf-8",
+    )
+
+    action = FakeAction()
+    hook_called = False
+
+    async def hook() -> None:
+        nonlocal hook_called
+        hook_called = True
+
+    with pytest.raises(
+        MissionExecutionError,
+        match="no longer in_air",
+    ):
+        asyncio.run(
+            execute_mission(
+                fake_vehicle(
+                    FakeMissionRaw(),
+                    action,
+                    LandedAfterCallbackTelemetry(),
+                ),
+                mission_path,
+                upload_timeout_s=1,
+                completion_timeout_s=1,
+                on_airborne=hook,
+            )
+        )
+
+    assert hook_called is True
+    assert action.land_called is True
+
+
+def test_invalid_airborne_hook_is_rejected_before_arming(
+    tmp_path: Path,
+) -> None:
+    mission_path = tmp_path / "mission.plan"
+    mission_path.write_text(
+        "{}",
+        encoding="utf-8",
+    )
+
+    action = FakeAction()
+
+    with pytest.raises(
+        TypeError,
+        match="on_airborne",
+    ):
+        asyncio.run(
+            execute_mission(
+                fake_vehicle(
+                    FakeMissionRaw(),
+                    action,
+                    FakeTelemetry(),
+                ),
+                mission_path,
+                upload_timeout_s=1,
+                completion_timeout_s=1,
+                on_airborne=object(),
+            )
+        )
+
+    assert action.arm_called is False
